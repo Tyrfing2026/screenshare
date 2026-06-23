@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>60FPS 極速實時影音共享平台</title>
+    <!-- Tailwind CSS 適用於現代化精美 UI 設計 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide 圖擺庫 -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- 使用 Firebase SDK 替代 WebSockets 信令 -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #0b0f19;
+        }
+        .mono-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* 自訂滾動條 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #111827;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+    </style>
+</head>
+<body class="text-gray-100 min-h-screen flex flex-col">
+
+    <!-- Iframe 頂部強烈警告橫幅 (專治 Canvas 沙盒限制) -->
+    <div id="iframe-global-banner" class="hidden bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 px-4 py-2.5 text-center text-sm font-semibold text-white flex items-center justify-center gap-2 shadow-lg animate-bounce-short z-50">
+        <i data-lucide="alert-octagon" class="w-5 h-5 animate-pulse"></i>
+        <span>瀏覽器安全限制：螢幕分享功能【必須在獨立分頁】執行！</span>
+        <button onclick="openInNewTab()" class="ml-3 px-3 py-1 bg-white text-orange-700 hover:bg-gray-100 transition-all rounded-lg text-xs font-bold shadow-md flex items-center gap-1">
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+            在新分頁開啟 (Blob 模式)
+        </button>
+    </div>
+
+    <!-- 頂部導覽列 -->
+    <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center space-x-3">
+            <div class="bg-indigo-600 p-2 rounded-lg text-white animate-pulse">
+                <i data-lucide="zap" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg leading-tight tracking-wide bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                    StreamRTC Ultra
+                </h1>
+                <p class="text-xs text-gray-400">1080p 60FPS+ 極致流暢影音共享</p>
+            </div>
+        </div>
+
+        <!-- 狀態指示器與金鑰重設 -->
+        <div class="flex items-center space-x-4">
+            <button id="btn-reset-config" onclick="clearCustomFirebaseConfig()" class="hidden text-xs text-gray-400 hover:text-red-400 border border-gray-800 hover:border-red-900 bg-gray-950/60 px-3 py-1.5 rounded-full transition-all flex items-center gap-1">
+                <i data-lucide="settings-2" class="w-3.5 h-3.5"></i>
+                重設 Firebase 設定
+            </button>
+            <div class="flex items-center space-x-2 bg-gray-800/80 px-3 py-1.5 rounded-full border border-gray-700">
+                <span class="relative flex h-2 w-2">
+                    <span id="status-ping-pulse" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span id="status-ping-dot" class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                </span>
+                <span id="connection-status-text" class="text-xs font-medium text-gray-300">安全初始化中...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- [全新增] 自訂 Firebase 設定精連引導彈窗 -->
+    <div id="firebase-config-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md hidden">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center space-x-3 text-indigo-400">
+                <div class="p-3 bg-indigo-950/50 rounded-xl border border-indigo-800/40">
+                    <i data-lucide="database" class="w-8 h-8"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-gray-100">建立您專屬的 Firebase 通訊頻道</h3>
+                    <p class="text-xs text-indigo-300">本機執行與 GitHub Pages 部署必備設定</p>
+                </div>
+            </div>
+            <p class="text-xs text-gray-400 leading-relaxed">
+                由於您是在本機開啟 HTML 或是部署在外部（如 GitHub），此程式需要連接到您專屬的 Firebase 資料庫來進行**免伺服器 P2P 訊號傳輸**。
+            </p>
+            <div class="bg-gray-950 p-4 rounded-xl border border-gray-800 space-y-2.5 text-xs text-gray-300">
+                <p class="font-semibold text-emerald-400 flex items-center gap-1">
+                    <i data-lucide="help-circle" class="w-4 h-4"></i> 快速免費建立步驟（只需 2 分鐘）：
+                </p>
+                <ol class="list-decimal pl-4 space-y-1.5 text-gray-400">
+                    <li>前往 <a href="https://console.firebase.google.com/" target="_blank" class="text-indigo-400 underline hover:text-indigo-300">Firebase 主控台</a> 建立免費專案。</li>
+                    <li>在左側選單<b>「Build > Authentication」</b>中，啟用<b>「Anonymous (匿名登入)」</b>。</li>
+                    <li>在左側選單<b>「Build > Firestore Database」</b>中，建立資料庫（選擇測試模式啟用）。</li>
+                    <li>在專案設定中，新增一個「網頁 app」，並複製其 <code class="text-indigo-300">firebaseConfig</code> 內容。</li>
+                </ol>
+            </div>
+            <div class="space-y-2">
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider">請貼上您的 Firebase Config JSON</label>
+                <textarea id="input-firebase-config" rows="6" placeholder='{&#10;  "apiKey": "AIzaSy...",&#10;  "authDomain": "...",&#10;  "projectId": "...",&#10;  "storageBucket": "...",&#10;  "messagingSenderId": "...",&#10;  "appId": "..."&#10;}' class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs mono-font focus:outline-none focus:border-indigo-500 text-indigo-300 placeholder-gray-700"></textarea>
+            </div>
+            <div class="flex space-x-3 pt-2">
+                <button onclick="saveCustomFirebaseConfig()" class="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 text-sm">
+                    <i data-lucide="save" class="w-4 h-4"></i>
+                    <span>儲存設定並啟動平台</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 彈出式「瀏覽器安全阻擋」引導模態視窗 -->
+    <div id="safety-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center space-x-3 text-amber-500">
+                <div class="p-3 bg-amber-950/50 rounded-xl border border-amber-800/40">
+                    <i data-lucide="shield-alert" class="w-8 h-8"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-gray-100">瀏覽器安全政策阻擋分享</h3>
+                    <p class="text-xs text-amber-400">NotAllowedError / SecurityError</p>
+                </div>
+            </div>
+            <p class="text-sm text-gray-400 leading-relaxed">
+                這是正常現象！因為您正在預覽視窗（Iframe）內操作，瀏覽器為了保護您的隱私，**禁止嵌入式框架進行螢幕錄製與分享**。
+            </p>
+            <div class="bg-gray-950 p-4 rounded-xl border border-gray-800 space-y-2 text-xs text-gray-300">
+                <p class="font-semibold text-indigo-400 flex items-center gap-1">
+                    <i data-lucide="help-circle" class="w-4 h-4"></i> 如何完美啟用分享：
+                </p>
+                <ol class="list-decimal pl-4 space-y-1.5 text-gray-400">
+                    <li>請點選下方<b>「在新分頁打開本站」</b>按鈕。</li>
+                    <li>或者點擊編輯器右上角的 <b class="text-white">「在新分頁開啟 (Open in new tab)」</b>。</li>
+                    <li>在新分頁中，您即可自由分享您的任何螢幕、分頁，並支援傳輸系統音訊！</li>
+                </ol>
+            </div>
+            <div class="flex space-x-3 pt-2">
+                <button onclick="openInNewTab()" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 text-sm">
+                    <i data-lucide="external-link" class="w-4 h-4"></i>
+                    <span>在新分頁打開本站 (解鎖權限)</span>
+                </button>
+                <button onclick="hideSafetyModal()" class="px-4 py-3 bg-gray-850 hover:bg-gray-800 border border-gray-800 text-gray-400 rounded-xl text-sm font-semibold transition-all">
+                    關閉提示
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自訂通知元件 (替代原生 alert) -->
+    <div id="notification-toast" class="fixed top-24 right-6 z-50 transform translate-x-full transition-transform duration-300 ease-out flex items-center p-4 space-x-3 bg-gray-900 border-l-4 border-indigo-500 rounded-lg shadow-xl max-w-sm">
+        <div id="toast-icon" class="text-indigo-400">
+            <i data-lucide="info" class="w-6 h-6"></i>
+        </div>
+        <div class="flex-1">
+            <p id="toast-message" class="text-sm font-medium text-gray-200">提示訊息</p>
+        </div>
+        <button onclick="hideToast()" class="text-gray-500 hover:text-gray-300">
+            <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+    </div>
+
+    <!-- 主頁面版型 -->
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 p-6 overflow-hidden">
+        
+        <!-- 左側/中間：主播放器與畫面區域 -->
+        <div class="lg:col-span-3 flex flex-col space-y-4">
+            <div class="relative bg-black rounded-2xl border border-gray-800 flex-1 min-h-[400px] flex items-center justify-center overflow-hidden group shadow-2xl">
+                <!-- 預覽畫面與等待畫面 -->
+                <div id="video-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 bg-gray-950">
+                    <div class="w-16 h-16 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center text-indigo-400 mb-4 shadow-inner">
+                        <i data-lucide="monitor-play" class="w-8 h-8"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">等待分享畫面</h3>
+                    <p class="text-gray-400 max-w-md text-sm mb-6 leading-relaxed">
+                        您是分享者嗎？請在右側控制面板設定畫質並點擊「開始分享畫面」。<br>
+                        如果您是觀眾，請輸入朋友給您的 6 位數房間代碼加入。
+                    </p>
+                    <div class="flex flex-wrap justify-center gap-3">
+                        <button onclick="switchRole('host')" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-medium shadow-lg shadow-indigo-900/30 transition-all flex items-center space-x-2">
+                            <i data-lucide="video" class="w-4 h-4"></i>
+                            <span>切換為：我要分享</span>
+                        </button>
+                        <button onclick="switchRole('viewer')" class="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm font-medium border border-gray-700 transition-all flex items-center space-x-2">
+                            <i data-lucide="users" class="w-4 h-4"></i>
+                            <span>切換為：我要觀看</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 實際視訊播放器 -->
+                <video id="shared-video" class="w-full h-full object-contain hidden" playsinline autoplay></video>
+
+                <!-- 播放器自訂浮動控制列 -->
+                <div id="video-controls" class="absolute bottom-4 left-4 right-4 bg-gray-950/80 backdrop-blur-md border border-gray-800/80 p-3 rounded-xl flex items-center justify-between opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300 z-20">
+                    <div class="flex items-center space-x-3">
+                        <button id="btn-toggle-play" onclick="togglePlayState()" class="p-2 hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition-colors" title="播放/暫停">
+                            <i data-lucide="pause" class="w-5 h-5"></i>
+                        </button>
+                        <button id="btn-toggle-mute" onclick="toggleMuteState()" class="p-2 hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition-colors" title="靜音/取消靜音">
+                            <i data-lucide="volume-2" class="w-5 h-5"></i>
+                        </button>
+                        <span id="stream-type-tag" class="text-xs px-2 py-1 bg-red-950/60 border border-red-800/60 text-red-400 rounded-md font-medium">LIVESTREAM</span>
+                    </div>
+
+                    <div class="flex items-center space-x-3">
+                        <button onclick="enterFullscreen()" class="p-2 hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition-colors" title="全螢幕">
+                            <i data-lucide="maximize" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 下方即時效能監控儀表 -->
+            <div class="bg-gray-900/60 border border-gray-800 p-4 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="bg-gray-950/60 p-3 rounded-xl border border-gray-800/80 flex items-center space-x-3">
+                    <div class="p-2 bg-emerald-950/50 text-emerald-400 rounded-lg border border-emerald-800/30">
+                        <i data-lucide="gauge" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-400 leading-none mb-1">真實更新率</p>
+                        <p id="stat-fps" class="text-lg font-bold text-emerald-400 mono-font">0 FPS</p>
+                    </div>
+                </div>
+
+                <div class="bg-gray-950/60 p-3 rounded-xl border border-gray-800/80 flex items-center space-x-3">
+                    <div class="p-2 bg-indigo-950/50 text-indigo-400 rounded-lg border border-indigo-800/30">
+                        <i data-lucide="aspect-ratio" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-400 leading-none mb-1">畫面解析度</p>
+                        <p id="stat-resolution" class="text-lg font-bold text-indigo-400 mono-font">0 x 0</p>
+                    </div>
+                </div>
+
+                <div class="bg-gray-950/60 p-3 rounded-xl border border-gray-800/80 flex items-center space-x-3">
+                    <div class="p-2 bg-purple-950/50 text-purple-400 rounded-lg border border-purple-800/30">
+                        <i data-lucide="activity" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-400 leading-none mb-1">傳輸延遲估算</p>
+                        <p id="stat-latency" class="text-lg font-bold text-purple-400 mono-font">&lt; 150 ms</p>
+                    </div>
+                </div>
+
+                <div class="bg-gray-950/60 p-3 rounded-xl border border-gray-800/80 flex items-center space-x-3">
+                    <div class="p-2 bg-pink-950/50 text-pink-400 rounded-lg border border-pink-800/30">
+                        <i data-lucide="users" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-400 leading-none mb-1">當前觀看人數</p>
+                        <p id="stat-viewers" class="text-lg font-bold text-pink-400 mono-font">0 人</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右側：控制中心與互動面板 -->
+        <div class="flex flex-col space-y-6 h-full">
+            <!-- 模式切換器 -->
+            <div class="flex p-1 bg-gray-950 border border-gray-800 rounded-xl">
+                <button id="tab-host" onclick="switchRole('host')" class="flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all bg-indigo-600 text-white shadow-md">
+                    我要分享
+                </button>
+                <button id="tab-viewer" onclick="switchRole('viewer')" class="flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all text-gray-400 hover:text-gray-200">
+                    我要觀看
+                </button>
+            </div>
+
+            <!-- 控制面板容器 -->
+            <div class="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 flex flex-col space-y-5 flex-1 overflow-y-auto">
+                
+                <!-- HOST (分享者) 控制面版 -->
+                <div id="panel-host" class="space-y-5">
+                    <div class="border-b border-gray-800 pb-3">
+                        <h3 class="font-bold text-base flex items-center space-x-2">
+                            <i data-lucide="sliders" class="w-5 h-5 text-indigo-400"></i>
+                            <span>超高畫質/高影格設定</span>
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-1">調整最適合您的網路環境的輸出</p>
+                    </div>
+
+                    <!-- 設定參數 -->
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">最高解析度限制</label>
+                            <select id="config-resolution" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 text-gray-300">
+                                <option value="1080">1080p Full HD (強烈推薦)</option>
+                                <option value="1440">1440p 2K (需要極佳上傳速度)</option>
+                                <option value="2160">2160p 4K Ultra HD</option>
+                                <option value="720">720p HD (省流量模式)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">目標影格率 (FPS)</label>
+                            <select id="config-fps" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 text-gray-300">
+                                <option value="60">60 FPS (極致絲滑遊戲與影片)</option>
+                                <option value="90">90 FPS (高刷新率螢幕專用)</option>
+                                <option value="30">30 FPS (標準畫質)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 按鈕動作區 -->
+                    <div class="space-y-3 pt-2">
+                        <button id="btn-start-share" onclick="startScreenShare()" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2">
+                            <i data-lucide="screen-share" class="w-5 h-5"></i>
+                            <span>啟動 60fps 畫面分享</span>
+                        </button>
+                        <button id="btn-stop-share" onclick="stopScreenShare()" class="w-full py-3 bg-red-950/60 border border-red-800 text-red-300 font-semibold rounded-xl hover:bg-red-900/40 transition-all flex items-center justify-center space-x-2 hidden">
+                            <i data-lucide="screen-share-off" class="w-5 h-5"></i>
+                            <span>結束分享</span>
+                        </button>
+                    </div>
+
+                    <!-- 邀請與連線區域 -->
+                    <div id="room-link-container" class="space-y-3 pt-3 border-t border-gray-800 hidden">
+                        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider">邀請好友加入連結</label>
+                        <div class="flex space-x-2">
+                            <input id="share-url-input" type="text" readonly class="flex-1 bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs mono-font focus:outline-none text-gray-300" value="">
+                            <button onclick="copyShareUrl()" class="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl border border-gray-700 hover:text-white transition-colors" title="複製連結">
+                                <i data-lucide="copy" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-gray-500">傳送此專屬連結，好友點開即可**實時 60fps 觀看**您的精采畫面與系統聲音！</p>
+                    </div>
+                </div>
+
+                <!-- VIEWER (觀看者) 控制面版 -->
+                <div id="panel-viewer" class="space-y-5 hidden">
+                    <div class="border-b border-gray-800 pb-3">
+                        <h3 class="font-bold text-base flex items-center space-x-2">
+                            <i data-lucide="tv" class="w-5 h-5 text-indigo-400"></i>
+                            <span>加入好友的分享房</span>
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-1">輸入 6 位數房號直接建立實時串流</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">房間編號 (Room ID)</label>
+                            <input id="input-host-id" type="text" maxLength="6" placeholder="例如：123456" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-center text-lg font-bold tracking-widest mono-font focus:outline-none focus:border-indigo-500 text-indigo-300 placeholder-gray-600">
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        <button id="btn-join-room" onclick="joinRoom()" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2">
+                            <i data-lucide="log-in" class="w-5 h-5"></i>
+                            <span>加入共享看播</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 即時文字聊天室 -->
+                <div class="flex-1 flex flex-col min-h-[220px] pt-4 border-t border-gray-800">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center space-x-1.5">
+                            <i data-lucide="message-square" class="w-4 h-4 text-purple-400"></i>
+                            <span>同屏互動聊天</span>
+                        </h4>
+                        <span id="chat-user-tag" class="text-[10px] text-gray-500 mono-font"></span>
+                    </div>
+
+                    <!-- 聊天訊息展示區 -->
+                    <div id="chat-box" class="flex-1 bg-gray-950 rounded-xl p-3 border border-gray-800 overflow-y-auto text-xs space-y-2.5 h-[150px] max-h-[200px]">
+                        <p class="text-gray-500 italic text-center py-2">連線成功後，即可開始即時文字交流！</p>
+                    </div>
+
+                    <!-- 聊天輸入區 -->
+                    <form id="chat-form" onsubmit="sendChatMessage(event)" class="mt-2 flex gap-2">
+                        <input id="chat-input" type="text" disabled placeholder="連線後即可發言..." class="flex-1 bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-indigo-500 disabled:opacity-50 text-gray-200">
+                        <button type="submit" id="btn-send-msg" disabled class="p-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl transition-all">
+                            <i data-lucide="send" class="w-4 h-4"></i>
+                        </button>
+                    </form>
+                </div>
+
+            </div>
+
+            <!-- 底部最佳實踐指南 -->
+            <div class="bg-gray-900/30 border border-gray-800/80 p-4 rounded-xl text-xs space-y-2">
+                <p class="font-bold text-gray-300 flex items-center space-x-1">
+                    <i data-lucide="help-circle" class="w-4 h-4 text-indigo-400"></i>
+                    <span>如何確保完美的 60FPS 與 1080p？</span>
+                </p>
+                <ol class="list-decimal pl-4 space-y-1 text-gray-400 leading-relaxed">
+                    <li>選擇「<b>分享單個分頁</b>」通常能獲得最絲滑流暢的 60fps 體驗。</li>
+                    <li>分享時務必勾選「<b>同時分享系統音訊</b>」以便共享背景音樂或遊戲音。</li>
+                    <li>確保兩端瀏覽器皆已開啟「<b>硬體加速</b>」（Hardware Acceleration）功能。</li>
+                </ol>
+            </div>
+        </div>
+    </main>
+
+    <!-- 頁尾 -->
+    <footer class="py-4 border-t border-gray-900 bg-gray-950 text-center text-xs text-gray-500">
+        <p>© 2026 StreamRTC. 整合 Firestore Serverless 實時傳輸技術.</p>
+    </footer>
+
+    <!-- 主要業務邏輯腳本 -->
+    <script>
+        // 1. 初始化全域與 Firebase 變數
+        let activeStream = null;
+        let activeCall = null; 
+        let activeDataChannel = null; 
+        let activeDataChannels = {}; 
+        let currentRole = 'host'; 
+        let myRoomId = ''; 
+        let targetRoomId = ''; 
+        let viewerId = 'viewer_' + Math.floor(10000 + Math.random() * 90000); 
+        const appStartTime = Date.now(); 
+
+        // 效能監控變數
+        let lastDecodedFrames = 0;
+        let lastFrameTime = performance.now();
+        let fpsCheckInterval = null;
+
+        // WebRTC 連線配置與 STUN 伺服器
+        const rtcConfig = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' }
+            ]
+        };
+
+        const myNickname = '用戶_' + Math.floor(1000 + Math.random() * 9000);
+
+        // Firebase 連線對象
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let roomsCollection = null;
+        let signalsCollection = null;
+        let signalsUnsubscribe = null;
+
+        // 網頁載入初始化
+        window.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            document.getElementById('chat-user-tag').innerText = myNickname;
+
+            // 偵測是否處於 Iframe 中，顯示頂部警示橫幅
+            if (window.self !== window.top) {
+                document.getElementById('iframe-global-banner').classList.remove('hidden');
+            }
+
+            // 初始化 Firebase
+            await initFirebase();
+
+            // 檢查 URL 參數中是否帶有房間號碼 (例如: ?room=123456)
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomFromUrl = urlParams.get('room') || window.location.hash.substring(1);
+            if (roomFromUrl && roomFromUrl.length === 6) {
+                switchRole('viewer');
+                document.getElementById('input-host-id').value = roomFromUrl;
+                showToast("已自動載入房號 " + roomFromUrl + "，請點選「加入共享看播」！", "info");
+            }
+        });
+
+        // 安全地開啟新分頁：在 Canvas 中使用 Blob URL 作為安全 Fallback
+        function openInNewTab() {
+            try {
+                if (window.location.protocol !== 'about:' && !window.location.href.startsWith('blob:')) {
+                    window.open(window.location.href, '_blank');
+                    return;
+                }
+                // 如果是 Sandbox，將當前 HTML 轉為 Blob URL 開啟
+                const htmlContent = document.documentElement.outerHTML;
+                const blob = new Blob([htmlContent], { type: 'text/html' });
+                const blobUrl = URL.createObjectURL(blob);
+                window.open(blobUrl, '_blank');
+            } catch (e) {
+                showToast("無法在新分頁中直接執行。請點選 Canvas 編輯器右上角的「Open in new tab」按鈕，或下載至本機執行！", "error");
+            }
+        }
+
+        function showSafetyModal() {
+            document.getElementById('safety-modal').classList.remove('hidden');
+        }
+
+        function hideSafetyModal() {
+            document.getElementById('safety-modal').classList.add('hidden');
+        }
+
+        // 2. 初始化 Firebase (支援環境注入變數與本機/GitHub 密鑰精靈)
+        async function initFirebase() {
+            try {
+                let firebaseConfig = null;
+                let isCustomConfig = false;
+
+                // A. 優先嘗試獲取系統動態注入的密鑰 (Canvas Preview 環境)
+                if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                    firebaseConfig = JSON.parse(__firebase_config);
+                } 
+                // B. 若無，尋找本機 LocalStorage 中有無手動設定的自訂密鑰
+                else {
+                    const localSavedConfig = localStorage.getItem('custom_firebase_config');
+                    if (localSavedConfig) {
+                        firebaseConfig = JSON.parse(localSavedConfig);
+                        isCustomConfig = true;
+                    }
+                }
+
+                // C. 如果兩者皆無，立刻彈出「Firebase 自訂設定引導精靈」
+                if (!firebaseConfig) {
+                    updateStatus('error', '等待 Firebase 設定...');
+                    document.getElementById('firebase-config-modal').classList.remove('hidden');
+                    return;
+                }
+
+                // 關閉精靈視窗 (若是本機載入)
+                document.getElementById('firebase-config-modal').classList.add('hidden');
+                if (isCustomConfig) {
+                    document.getElementById('btn-reset-config').classList.remove('hidden');
+                }
+
+                // 初始化 Firebase 實體
+                firebase.initializeApp(firebaseConfig);
+                auth = firebase.auth();
+                db = firebase.firestore();
+
+                updateStatus('connecting', '正在建立加密安全通道...');
+
+                // 進行安全認證 (Anonymous 登入)
+                let userCredential = null;
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    try {
+                        userCredential = await auth.signInWithCustomToken(__initial_auth_token);
+                    } catch (err) {
+                        userCredential = await auth.signInAnonymously();
+                    }
+                } else {
+                    userCredential = await auth.signInAnonymously();
+                }
+
+                if (userCredential && userCredential.user) {
+                    currentUser = userCredential.user;
+                    console.log("Firebase 認證成功，UID:", currentUser.uid);
+                    updateStatus('ready', '連線就緒，可以分享或加入');
+                } else {
+                    throw new Error("未能成功取得認證使用者");
+                }
+
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-stream-app';
+                
+                // 依照 Rule 1 的指定路徑格式
+                roomsCollection = db.collection('artifacts/' + appId + '/public/data/rooms');
+                signalsCollection = db.collection('artifacts/' + appId + '/public/data/signals');
+
+            } catch (e) {
+                console.error("Firebase 初始化失敗:", e);
+                updateStatus('error', '資料庫連線失敗');
+                showToast("Firebase 連線錯誤，請確認設定內容正確無誤。", "error");
+            }
+        }
+
+        // 保存手動貼入的自訂 Firebase 密鑰
+        function saveCustomFirebaseConfig() {
+            const textarea = document.getElementById('input-firebase-config');
+            const rawValue = textarea.value.trim();
+            if (!rawValue) {
+                showToast("請輸入有效的 Firebase Config JSON 內容！", "error");
+                return;
+            }
+
+            try {
+                // 嘗試解析 JSON 是否合法
+                let parsedConfig = {};
+                if (rawValue.includes('apiKey')) {
+                    // 如果使用者直接複製整段物件，嘗試清理並轉為 JSON
+                    let jsonStr = rawValue;
+                    if (!rawValue.startsWith('{')) {
+                        // 嘗試尋找括弧
+                        const start = rawValue.indexOf('{');
+                        const end = rawValue.lastIndexOf('}');
+                        if (start !== -1 && end !== -1) {
+                            jsonStr = rawValue.substring(start, end + 1);
+                        }
+                    }
+                    // 為了相容 JavaScript 物件格式與 strict JSON，進行簡單的正則修復
+                    jsonStr = jsonStr
+                        .replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":') // 幫 Key 加上雙引號
+                        .replace(/'/g, '"'); // 單引號轉雙引號
+                    
+                    parsedConfig = JSON.parse(jsonStr);
+                } else {
+                    parsedConfig = JSON.parse(rawValue);
+                }
+
+                if (!parsedConfig.apiKey || !parsedConfig.projectId) {
+                    throw new Error("遺失必要屬性 (apiKey / projectId)");
+                }
+
+                // 儲存至本機
+                localStorage.setItem('custom_firebase_config', JSON.stringify(parsedConfig));
+                showToast("設定成功！正在重試初始化...", "success");
+                
+                // 刷新網頁套用新設定
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+
+            } catch (e) {
+                showToast("JSON 格式解析錯誤，請確認內容符合正確的 JavaScript / JSON 格式！", "error");
+                console.error(e);
+            }
+        }
+
+        // 清除自訂 Firebase 設定並重新設定
+        function clearCustomFirebaseConfig() {
+            localStorage.removeItem('custom_firebase_config');
+            showToast("已清除自訂設定，請重新配置...", "info");
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        }
+
+        // 3. 角色與切換面板
+        function switchRole(role) {
+            currentRole = role;
+            const tabHost = document.getElementById('tab-host');
+            const tabViewer = document.getElementById('tab-viewer');
+            const panelHost = document.getElementById('panel-host');
+            const panelViewer = document.getElementById('panel-viewer');
+
+            if (role === 'host') {
+                tabHost.className = "flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all bg-indigo-600 text-white shadow-md";
+                tabViewer.className = "flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all text-gray-400 hover:text-gray-200";
+                panelHost.classList.remove('hidden');
+                panelViewer.classList.add('hidden');
+                updateShareUrl();
+            } else {
+                tabHost.className = "flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all text-gray-400 hover:text-gray-200";
+                tabViewer.className = "flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all bg-emerald-600 text-white shadow-md";
+                panelHost.classList.add('hidden');
+                panelViewer.classList.remove('hidden');
+            }
+        }
+
+        // 4. HOST (分享端) 邏輯：擷取螢幕並註冊房號
+        async function startScreenShare() {
+            if (!currentUser || !roomsCollection) {
+                showToast("安全登入尚未就緒，請稍候或設定 Firebase...", "info");
+                return;
+            }
+
+            const targetRes = document.getElementById('config-resolution').value;
+            const targetFps = document.getElementById('config-fps').value;
+
+            // 超高規格 WebRTC 螢幕共享擷取設定
+            const captureConstraints = {
+                video: {
+                    width: { ideal: targetRes === '2160' ? 3840 : targetRes === '1440' ? 2560 : targetRes === '1080' ? 1920 : 1280 },
+                    height: { ideal: targetRes === '2160' ? 2160 : targetRes === '1440' ? 1440 : targetRes === '1080' ? 1080 : 720 },
+                    frameRate: { ideal: parseInt(targetFps), max: 120 }
+                },
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                }
+            };
+
+            try {
+                updateStatus('connecting', '正在擷取系統螢幕與音效...');
+                
+                // 呼叫瀏覽器 API 擷取螢幕
+                activeStream = await navigator.mediaDevices.getDisplayMedia(captureConstraints);
+                
+                // 產生一個好記的 6 位數房號
+                myRoomId = Math.floor(100000 + Math.random() * 900000).toString();
+                
+                // 在 Firestore 中註冊此房號
+                await roomsCollection.doc(myRoomId).set({
+                    hostId: currentUser.uid,
+                    active: true,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                showToast("螢幕共享已啟動！房間號碼為: " + myRoomId, "success");
+                updateStatus('live', '正在同步直播：' + myRoomId);
+
+                // 監聽結束共享事件
+                activeStream.getVideoTracks()[0].onended = () => {
+                    stopScreenShare();
+                };
+
+                // 本地預覽播放器設定
+                setupVideoPlayer(activeStream);
+
+                // 更新介面
+                document.getElementById('btn-start-share').classList.add('hidden');
+                document.getElementById('btn-stop-share').classList.remove('hidden');
+                document.getElementById('room-link-container').classList.remove('hidden');
+                updateShareUrl();
+
+                // 啟動 Host 信令接收監聽
+                startHostSignalingListener();
+
+            } catch (err) {
+                console.error("螢幕擷取錯誤:", err);
+                updateStatus('ready', '連線就緒，可以分享或加入');
+                
+                // 檢查是否為 Iframe 限制所引起的安全拒絕
+                if (window.self !== window.top || err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+                    showSafetyModal();
+                } else {
+                    showToast("啟動分享失敗，原因：" + err.message, "error");
+                }
+            }
+        }
+
+        // Host 監聽來自 Viewer 的 SDP Offer 信令
+        function startHostSignalingListener() {
+            const peerConnections = {}; 
+
+            if (signalsUnsubscribe) signalsUnsubscribe();
+            if (!currentUser) return; 
+
+            signalsUnsubscribe = signalsCollection.onSnapshot((snapshot) => {
+                snapshot.docChanges().forEach(async (change) => {
+                    if (change.type === 'added') {
+                        const data = change.doc.data();
+                        
+                        const docTime = data.timestamp ? (data.timestamp.toMillis ? data.timestamp.toMillis() : data.timestamp) : Date.now();
+                        if (docTime < appStartTime - 15000) return; 
+
+                        if (data.roomId === myRoomId && data.to === 'host') {
+                            const fromViewer = data.from;
+
+                            if (data.type === 'offer') {
+                                console.log('收到來自觀眾的 Offer 請求:', fromViewer);
+
+                                const pc = new RTCPeerConnection(rtcConfig);
+                                peerConnections[fromViewer] = pc;
+
+                                if (activeStream) {
+                                    activeStream.getTracks().forEach(track => {
+                                        pc.addTrack(track, activeStream);
+                                    });
+                                }
+
+                                pc.ondatachannel = (event) => {
+                                    const dc = event.channel;
+                                    setupDataChannel(dc, fromViewer);
+                                };
+
+                                pc.onicecandidate = (event) => {
+                                    if (event.candidate && currentUser) {
+                                        signalsCollection.add({
+                                            roomId: myRoomId,
+                                            from: 'host',
+                                            to: fromViewer,
+                                            type: 'candidate',
+                                            candidate: JSON.stringify(event.candidate),
+                                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                                        });
+                                    }
+                                };
+
+                                const offerDesc = JSON.parse(data.sdp);
+                                await pc.setRemoteDescription(new RTCSessionDescription(offerDesc));
+
+                                const answer = await pc.createAnswer();
+                                await pc.setLocalDescription(answer);
+
+                                if (currentUser) {
+                                    await signalsCollection.add({
+                                        roomId: myRoomId,
+                                        from: 'host',
+                                        to: fromViewer,
+                                        type: 'answer',
+                                        sdp: JSON.stringify(answer),
+                                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                                    });
+                                }
+
+                                updateViewerCount(1);
+                            } 
+                            else if (data.type === 'candidate') {
+                                const pc = peerConnections[fromViewer];
+                                if (pc && pc.signalingState !== 'closed') {
+                                    try {
+                                        const candidate = JSON.parse(data.candidate);
+                                        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                                    } catch (e) {
+                                        console.warn("套用 ICE 失敗 (可忽略):", e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }, (err) => {
+                console.error("Firestore 信令監聽失敗:", err);
+            });
+        }
+
+        // Host 結束分享
+        async function stopScreenShare() {
+            if (activeStream) {
+                activeStream.getTracks().forEach(track => track.stop());
+                activeStream = null;
+            }
+
+            if (myRoomId && roomsCollection) {
+                try {
+                    await roomsCollection.doc(myRoomId).update({ active: false });
+                } catch (e) {
+                    console.error("更新房間狀態失敗:", e);
+                }
+            }
+
+            if (signalsUnsubscribe) {
+                signalsUnsubscribe();
+                signalsUnsubscribe = null;
+            }
+
+            resetToWaitingState();
+            showToast("已停止畫面共享。", "info");
+        }
+
+        // 5. VIEWER (觀看端) 邏輯：加入房間
+        async function joinRoom() {
+            if (!currentUser || !roomsCollection) {
+                showToast("安全登入尚未就緒，請稍候或設定 Firebase...", "info");
+                return;
+            }
+
+            const hostId = document.getElementById('input-host-id').value.trim();
+            if (hostId.length !== 6) {
+                showToast("請輸入正確的 6 位數房間代碼！", "error");
+                return;
+            }
+
+            updateStatus('connecting', '正在查詢房間狀態...');
+            targetRoomId = hostId;
+
+            try {
+                const roomDoc = await roomsCollection.doc(hostId).get();
+                if (!roomDoc.exists || !roomDoc.data().active) {
+                    showToast("找不到該房間，或對方已結束畫面分享！", "error");
+                    updateStatus('ready', '連線就緒，可以分享或加入');
+                    return;
+                }
+
+                updateStatus('connecting', '正在協調點對點實時通道...');
+
+                const pc = new RTCPeerConnection(rtcConfig);
+                activeCall = pc; 
+
+                const remoteStream = new MediaStream();
+                pc.ontrack = (event) => {
+                    event.streams[0].getTracks().forEach(track => {
+                        remoteStream.addTrack(track);
+                    });
+                    setupVideoPlayer(remoteStream);
+                    updateStatus('live', '同步接收中：' + targetRoomId);
+                    showToast("已建立實時 60fps 串流通道！", "success");
+                };
+
+                pc.onconnectionstatechange = () => {
+                    console.log("WebRTC 連線狀態:", pc.connectionState);
+                    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+                        showToast("與分享端的連線已中斷。", "info");
+                        resetToWaitingState();
+                    }
+                };
+
+                const dc = pc.createDataChannel('chat');
+                setupDataChannel(dc);
+
+                pc.onicecandidate = (event) => {
+                    if (event.candidate && currentUser) {
+                        signalsCollection.add({
+                            roomId: targetRoomId,
+                            from: viewerId,
+                            to: 'host',
+                            type: 'candidate',
+                            candidate: JSON.stringify(event.candidate),
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+                };
+
+                const offer = await pc.createOffer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
+                await pc.setLocalDescription(offer);
+
+                if (currentUser) {
+                    await signalsCollection.add({
+                        roomId: targetRoomId,
+                        from: viewerId,
+                        to: 'host',
+                        type: 'offer',
+                        sdp: JSON.stringify(offer),
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+
+                startViewerSignalingListener(pc);
+
+            } catch (err) {
+                console.error("加入房間失敗:", err);
+                showToast("連線發生錯誤: " + err.message, "error");
+                updateStatus('ready', '連線就緒，可以分享或加入');
+            }
+        }
+
+        function startViewerSignalingListener(pc) {
+            if (signalsUnsubscribe) signalsUnsubscribe();
+            if (!currentUser) return; 
+
+            signalsUnsubscribe = signalsCollection.onSnapshot((snapshot) => {
+                snapshot.docChanges().forEach(async (change) => {
+                    if (change.type === 'added') {
+                        const data = change.doc.data();
+
+                        if (data.roomId === targetRoomId && data.to === viewerId && data.from === 'host') {
+                            if (data.type === 'answer' && pc.signalingState === 'have-local-offer') {
+                                console.log('收到 Host 的 Answer，套用中...');
+                                const answerDesc = JSON.parse(data.sdp);
+                                await pc.setRemoteDescription(new RTCSessionDescription(answerDesc));
+                            } 
+                            else if (data.type === 'candidate') {
+                                try {
+                                    const candidate = JSON.parse(data.candidate);
+                                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                                } catch (e) {
+                                    console.warn("套用 ICE 失敗 (可忽略):", e);
+                                }
+                            }
+                        }
+                    }
+                });
+            }, (err) => {
+                console.error("Viewer 訂閱信令失敗:", err);
+            });
+        }
+
+        // 6. 即時聊天室互動
+        function setupDataChannel(dc, peerId = null) {
+            if (currentRole === 'host') {
+                activeDataChannels[peerId] = dc;
+                
+                dc.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'chat') {
+                        appendChatMessage(data.sender, data.text);
+                        broadcastMessage(data, peerId);
+                    }
+                };
+
+                dc.onclose = () => {
+                    delete activeDataChannels[peerId];
+                    updateViewerCount(-1);
+                };
+
+                enableChat();
+            } else {
+                activeDataChannel = dc;
+
+                dc.onopen = () => {
+                    console.log('與分享端的 Chat 資料通道已開通。');
+                    enableChat();
+                    appendChatMessage("系統提示", "已建立極速低延遲通道，快打聲招呼吧！");
+                };
+
+                dc.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'chat') {
+                        appendChatMessage(data.sender, data.text);
+                    }
+                };
+
+                dc.onclose = () => {
+                    resetToWaitingState();
+                };
+            }
+        }
+
+        function sendChatMessage(e) {
+            if (e) e.preventDefault();
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const msgObj = {
+                type: 'chat',
+                sender: myNickname,
+                text: text
+            };
+
+            appendChatMessage(myNickname, text);
+
+            if (currentRole === 'host') {
+                broadcastMessage(msgObj);
+            } else if (activeDataChannel && activeDataChannel.readyState === 'open') {
+                activeDataChannel.send(JSON.stringify(msgObj));
+            }
+
+            input.value = '';
+        }
+
+        function broadcastMessage(msgObj, excludePeerId = null) {
+            const dataStr = JSON.stringify(msgObj);
+            if (currentRole === 'host') {
+                Object.keys(activeDataChannels).forEach(vid => {
+                    if (vid !== excludePeerId && activeDataChannels[vid].readyState === 'open') {
+                        activeDataChannels[vid].send(dataStr);
+                    }
+                });
+            }
+        }
+
+        function appendChatMessage(sender, text) {
+            const chatBox = document.getElementById('chat-box');
+            if (chatBox.querySelector('p.italic')) {
+                chatBox.innerHTML = '';
+            }
+
+            const isMe = sender === myNickname;
+            const msgEl = document.createElement('div');
+            msgEl.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'}`;
+
+            const bubbleBg = isMe ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-200';
+            const nameColor = isMe ? 'text-indigo-400' : 'text-purple-400';
+
+            msgEl.innerHTML = `
+                <span class="text-[10px] ${nameColor} font-medium mb-0.5">${sender}</span>
+                <span class="${bubbleBg} px-3 py-1.5 rounded-2xl max-w-[90%] break-all inline-block shadow-sm">${text}</span>
+            `;
+
+            chatBox.appendChild(msgEl);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function enableChat() {
+            document.getElementById('chat-input').removeAttribute('disabled');
+            document.getElementById('btn-send-msg').removeAttribute('disabled');
+        }
+
+        // 7. 視訊渲染與流暢 60FPS 檢測
+        function setupVideoPlayer(stream) {
+            const video = document.getElementById('shared-video');
+            const placeholder = document.getElementById('video-placeholder');
+
+            video.srcObject = stream;
+            video.classList.remove('hidden');
+            placeholder.classList.add('hidden');
+
+            video.play().catch(err => {
+                console.warn("自動播放受限:", err);
+            });
+
+            startFpsCounter(video);
+        }
+
+        function startFpsCounter(video) {
+            if (fpsCheckInterval) clearInterval(fpsCheckInterval);
+            
+            const fpsEl = document.getElementById('stat-fps');
+            const resEl = document.getElementById('stat-resolution');
+            lastDecodedFrames = 0;
+            lastFrameTime = performance.now();
+
+            fpsCheckInterval = setInterval(() => {
+                if (!video || video.paused) return;
+
+                if (video.videoWidth > 0) {
+                    resEl.innerText = `${video.videoWidth} x ${video.videoHeight}`;
+                }
+
+                if (video.getVideoPlaybackQuality) {
+                    const quality = video.getVideoPlaybackQuality();
+                    const currentFrames = quality.totalVideoFrames;
+                    const currentTime = performance.now();
+                    const elapsed = (currentTime - lastFrameTime) / 1000;
+
+                    if (elapsed > 0) {
+                        const calculatedFps = Math.round((currentFrames - lastDecodedFrames) / elapsed);
+                        fpsEl.innerText = `${calculatedFps} FPS`;
+                        
+                        if (calculatedFps >= 55) {
+                            fpsEl.className = "text-lg font-bold text-emerald-400 mono-font";
+                        } else if (calculatedFps >= 30) {
+                            fpsEl.className = "text-lg font-bold text-yellow-400 mono-font";
+                        } else {
+                            fpsEl.className = "text-lg font-bold text-red-400 mono-font";
+                        }
+
+                        lastDecodedFrames = currentFrames;
+                        lastFrameTime = currentTime;
+                    }
+                } else {
+                    fpsEl.innerText = "偵測中";
+                }
+            }, 1000);
+        }
+
+        // 8. 視訊控制按鈕
+        function togglePlayState() {
+            const video = document.getElementById('shared-video');
+            const icon = document.getElementById('btn-toggle-play').querySelector('i');
+            if (video.paused) {
+                video.play();
+                icon.setAttribute('data-lucide', 'pause');
+            } else {
+                video.pause();
+                icon.setAttribute('data-lucide', 'play');
+            }
+            lucide.createIcons();
+        }
+
+        function toggleMuteState() {
+            const video = document.getElementById('shared-video');
+            const icon = document.getElementById('btn-toggle-mute').querySelector('i');
+            video.muted = !video.muted;
+            if (video.muted) {
+                icon.setAttribute('data-lucide', 'volume-x');
+            } else {
+                icon.setAttribute('data-lucide', 'volume-2');
+            }
+            lucide.createIcons();
+        }
+
+        function enterFullscreen() {
+            const video = document.getElementById('shared-video');
+            if (video.requestFullscreen) {
+                video.requestFullscreen();
+            } else if (video.webkitRequestFullscreen) {
+                video.webkitRequestFullscreen();
+            }
+        }
+
+        // 複製分享網址
+        function copyShareUrl() {
+            const input = document.getElementById('share-url-input');
+            input.select();
+            input.setSelectionRange(0, 99999);
+
+            try {
+                const success = document.execCommand('copy');
+                if (success) {
+                    showToast("複製成功！快傳給朋友加入吧！", "success");
+                } else {
+                    throw new Error();
+                }
+            } catch (err) {
+                navigator.clipboard.writeText(input.value)
+                    .then(() => showToast("複製成功！快傳給朋友加入吧！", "success"))
+                    .catch(() => showToast("複製失敗，請手動複製網址文字框內容。", "error"));
+            }
+        }
+
+        function updateShareUrl() {
+            const idToUse = currentRole === 'host' ? myRoomId : targetRoomId;
+            if (idToUse) {
+                const url = window.location.origin + window.location.pathname + '?room=' + idToUse;
+                document.getElementById('share-url-input').value = url;
+            }
+        }
+
+        // 9. 重設狀態與清理機制
+        function resetToWaitingState() {
+            if (fpsCheckInterval) {
+                clearInterval(fpsCheckInterval);
+                fpsCheckInterval = null;
+            }
+
+            if (signalsUnsubscribe) {
+                signalsUnsubscribe();
+                signalsUnsubscribe = null;
+            }
+
+            if (activeCall) {
+                activeCall.close();
+                activeCall = null;
+            }
+
+            activeDataChannel = null;
+            activeDataChannels = {};
+
+            const video = document.getElementById('shared-video');
+            const placeholder = document.getElementById('video-placeholder');
+            
+            video.srcObject = null;
+            video.classList.add('hidden');
+            placeholder.classList.remove('hidden');
+
+            document.getElementById('btn-start-share').classList.remove('hidden');
+            document.getElementById('btn-stop-share').classList.add('hidden');
+            document.getElementById('room-link-container').classList.add('hidden');
+            
+            document.getElementById('chat-input').setAttribute('disabled', 'true');
+            document.getElementById('btn-send-msg').setAttribute('disabled', 'true');
+            document.getElementById('chat-box').innerHTML = '<p class="text-gray-500 italic text-center py-2">連線成功後，即可開始即時文字交流！</p>';
+
+            document.getElementById('stat-fps').innerText = '0 FPS';
+            document.getElementById('stat-resolution').innerText = '0 x 0';
+            document.getElementById('stat-viewers').innerText = '0 人';
+
+            updateStatus('ready', '連線就緒，可以分享或加入');
+        }
+
+        function updateStatus(state, desc) {
+            const textEl = document.getElementById('connection-status-text');
+            const pulse = document.getElementById('status-ping-pulse');
+            const dot = document.getElementById('status-ping-dot');
+
+            if (!textEl) return;
+            textEl.innerText = desc;
+
+            if (state === 'live') {
+                pulse.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75";
+                dot.className = "relative inline-flex rounded-full h-2 w-2 bg-emerald-500";
+            } else if (state === 'connecting') {
+                pulse.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75";
+                dot.className = "relative inline-flex rounded-full h-2 w-2 bg-yellow-500";
+            } else if (state === 'ready') {
+                pulse.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75";
+                dot.className = "relative inline-flex rounded-full h-2 w-2 bg-indigo-500";
+            } else {
+                pulse.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75";
+                dot.className = "relative inline-flex rounded-full h-2 w-2 bg-red-500";
+            }
+        }
+
+        function updateViewerCount(diff) {
+            const countEl = document.getElementById('stat-viewers');
+            let current = parseInt(countEl.innerText);
+            if (isNaN(current)) current = 0;
+            countEl.innerText = Math.max(0, current + diff) + ' 人';
+        }
+
+        // 10. 自訂 Toast 通知
+        let toastTimeout = null;
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('notification-toast');
+            const iconContainer = document.getElementById('toast-icon');
+            const msgEl = document.getElementById('toast-message');
+
+            msgEl.innerText = message;
+
+            if (type === 'success') {
+                toast.className = "fixed top-24 right-6 z-50 transform transition-transform duration-300 ease-out flex items-center p-4 space-x-3 bg-gray-900 border-l-4 border-emerald-500 rounded-lg shadow-xl max-w-sm";
+                iconContainer.innerHTML = '<i data-lucide="check-circle" class="w-6 h-6 text-emerald-400"></i>';
+            } else if (type === 'error') {
+                toast.className = "fixed top-24 right-6 z-50 transform transition-transform duration-300 ease-out flex items-center p-4 space-x-3 bg-gray-900 border-l-4 border-red-500 rounded-lg shadow-xl max-w-sm";
+                iconContainer.innerHTML = '<i data-lucide="x-circle" class="w-6 h-6 text-red-400"></i>';
+            } else {
+                toast.className = "fixed top-24 right-6 z-50 transform transition-transform duration-300 ease-out flex items-center p-4 space-x-3 bg-gray-900 border-l-4 border-indigo-500 rounded-lg shadow-xl max-w-sm";
+                iconContainer.innerHTML = '<i data-lucide="info" class="w-6 h-6 text-indigo-400"></i>';
+            }
+
+            lucide.createIcons();
+            toast.classList.remove('translate-x-full');
+
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                hideToast();
+            }, 5000);
+        }
+
+        function hideToast() {
+            const toast = document.getElementById('notification-toast');
+            toast.classList.add('translate-x-full');
+        }
+    </script>
+</body>
+</html>
