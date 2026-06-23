@@ -6,7 +6,7 @@
     <title>60FPS 極速實時影音共享平台</title>
     <!-- Tailwind CSS 適用於現代化精美 UI 設計 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide 圖擺庫 -->
+    <!-- Lucide 圖標庫 -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- 使用 Firebase SDK 替代 WebSockets 信令 -->
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
@@ -39,13 +39,13 @@
 </head>
 <body class="text-gray-100 min-h-screen flex flex-col">
 
-    <!-- Iframe 頂部強烈警告橫幅 (專治 Canvas 沙盒限制) -->
-    <div id="iframe-global-banner" class="hidden bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 px-4 py-2.5 text-center text-sm font-semibold text-white flex items-center justify-center gap-2 shadow-lg animate-bounce-short z-50">
+    <!-- Iframe / file:// 頂部強烈警告橫幅 (專治安全上下文限制) -->
+    <div id="iframe-global-banner" class="hidden bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 px-4 py-2.5 text-center text-sm font-semibold text-white flex flex-wrap items-center justify-center gap-2 shadow-lg z-50">
         <i data-lucide="alert-octagon" class="w-5 h-5 animate-pulse"></i>
-        <span>瀏覽器安全限制：螢幕分享功能【必須在獨立分頁】執行！</span>
-        <button onclick="openInNewTab()" class="ml-3 px-3 py-1 bg-white text-orange-700 hover:bg-gray-100 transition-all rounded-lg text-xs font-bold shadow-md flex items-center gap-1">
+        <span id="banner-text">瀏覽器安全限制：螢幕分享功能【必須在獨立分頁且為 HTTPS 或 localhost】下執行！</span>
+        <button onclick="openInNewTab()" class="px-3 py-1 bg-white text-orange-700 hover:bg-gray-100 transition-all rounded-lg text-xs font-bold shadow-md flex items-center gap-1">
             <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-            在新分頁開啟 (Blob 模式)
+            在新分頁開啟 / 解鎖限制
         </button>
     </div>
 
@@ -67,7 +67,7 @@
         <div class="flex items-center space-x-4">
             <button id="btn-reset-config" onclick="clearCustomFirebaseConfig()" class="hidden text-xs text-gray-400 hover:text-red-400 border border-gray-800 hover:border-red-900 bg-gray-950/60 px-3 py-1.5 rounded-full transition-all flex items-center gap-1">
                 <i data-lucide="settings-2" class="w-3.5 h-3.5"></i>
-                重設 Firebase 設定
+                自訂 Firebase 設定
             </button>
             <div class="flex items-center space-x-2 bg-gray-800/80 px-3 py-1.5 rounded-full border border-gray-700">
                 <span class="relative flex h-2 w-2">
@@ -79,40 +79,30 @@
         </div>
     </header>
 
-    <!-- [全新增] 自訂 Firebase 設定精連引導彈窗 -->
-    <div id="firebase-config-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md hidden">
-        <div class="bg-gray-900 border border-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+    <!-- 自訂 Firebase 設定精連引導彈窗 (做為備用，預設會直接載入您的設定) -->
+    <div id="firebase-config-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-md hidden">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex items-center space-x-3 text-indigo-400">
                 <div class="p-3 bg-indigo-950/50 rounded-xl border border-indigo-800/40">
                     <i data-lucide="database" class="w-8 h-8"></i>
                 </div>
                 <div>
-                    <h3 class="text-lg font-bold text-gray-100">建立您專屬的 Firebase 通訊頻道</h3>
-                    <p class="text-xs text-indigo-300">本機執行與 GitHub Pages 部署必備設定</p>
+                    <h3 class="text-lg font-bold text-gray-100">覆蓋預設 Firebase 設定</h3>
+                    <p class="text-xs text-indigo-300">如果您需要使用其他 Firebase 專案，可在下方貼上</p>
                 </div>
             </div>
-            <p class="text-xs text-gray-400 leading-relaxed">
-                由於您是在本機開啟 HTML 或是部署在外部（如 GitHub），此程式需要連接到您專屬的 Firebase 資料庫來進行**免伺服器 P2P 訊號傳輸**。
-            </p>
-            <div class="bg-gray-950 p-4 rounded-xl border border-gray-800 space-y-2.5 text-xs text-gray-300">
-                <p class="font-semibold text-emerald-400 flex items-center gap-1">
-                    <i data-lucide="help-circle" class="w-4 h-4"></i> 快速免費建立步驟（只需 2 分鐘）：
-                </p>
-                <ol class="list-decimal pl-4 space-y-1.5 text-gray-400">
-                    <li>前往 <a href="https://console.firebase.google.com/" target="_blank" class="text-indigo-400 underline hover:text-indigo-300">Firebase 主控台</a> 建立免費專案。</li>
-                    <li>在左側選單<b>「Build > Authentication」</b>中，啟用<b>「Anonymous (匿名登入)」</b>。</li>
-                    <li>在左側選單<b>「Build > Firestore Database」</b>中，建立資料庫（選擇測試模式啟用）。</li>
-                    <li>在專案設定中，新增一個「網頁 app」，並複製其 <code class="text-indigo-300">firebaseConfig</code> 內容。</li>
-                </ol>
-            </div>
+            
             <div class="space-y-2">
-                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider">請貼上您的 Firebase Config JSON</label>
-                <textarea id="input-firebase-config" rows="6" placeholder='{&#10;  "apiKey": "AIzaSy...",&#10;  "authDomain": "...",&#10;  "projectId": "...",&#10;  "storageBucket": "...",&#10;  "messagingSenderId": "...",&#10;  "appId": "..."&#10;}' class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs mono-font focus:outline-none focus:border-indigo-500 text-indigo-300 placeholder-gray-700"></textarea>
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider">覆蓋預設 Firebase Config JSON</label>
+                <textarea id="input-firebase-config" rows="5" placeholder='{&#10;  "apiKey": "AIzaSy...",&#10;  "authDomain": "...",&#10;  "projectId": "...",&#10;  "storageBucket": "...",&#10;  "messagingSenderId": "...",&#10;  "appId": "..."&#10;}' class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs mono-font focus:outline-none focus:border-indigo-500 text-indigo-300 placeholder-gray-700"></textarea>
             </div>
             <div class="flex space-x-3 pt-2">
                 <button onclick="saveCustomFirebaseConfig()" class="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 text-sm">
                     <i data-lucide="save" class="w-4 h-4"></i>
-                    <span>儲存設定並啟動平台</span>
+                    <span>儲存並重新啟動</span>
+                </button>
+                <button onclick="hideFirebaseConfigModal()" class="px-4 py-3 bg-gray-850 hover:bg-gray-800 border border-gray-800 text-gray-400 rounded-xl text-sm font-semibold transition-all">
+                    取消
                 </button>
             </div>
         </div>
@@ -131,22 +121,22 @@
                 </div>
             </div>
             <p class="text-sm text-gray-400 leading-relaxed">
-                這是正常現象！因為您正在預覽視窗（Iframe）內操作，瀏覽器為了保護您的隱私，**禁止嵌入式框架進行螢幕錄製與分享**。
+                螢幕分享受阻！如果您是從本機雙擊開啟 HTML (網址開頭為 `file://`)，瀏覽器基於隱私安全考量，**全面禁止非 HTTPS 來源進行螢幕畫面錄製**。
             </p>
             <div class="bg-gray-950 p-4 rounded-xl border border-gray-800 space-y-2 text-xs text-gray-300">
                 <p class="font-semibold text-indigo-400 flex items-center gap-1">
-                    <i data-lucide="help-circle" class="w-4 h-4"></i> 如何完美啟用分享：
+                    <i data-lucide="help-circle" class="w-4 h-4"></i> 如何正確進行測試：
                 </p>
                 <ol class="list-decimal pl-4 space-y-1.5 text-gray-400">
-                    <li>請點選下方<b>「在新分頁打開本站」</b>按鈕。</li>
-                    <li>或者點擊編輯器右上角的 <b class="text-white">「在新分頁開啟 (Open in new tab)」</b>。</li>
-                    <li>在新分頁中，您即可自由分享您的任何螢幕、分頁，並支援傳輸系統音訊！</li>
+                    <li>將本網頁部署至 <b>GitHub Pages (會自動啟用安全 HTTPS)</b>。</li>
+                    <li>在本機使用伺服器開啟本頁（例如 VS Code Live Server，網址會是 <code class="text-white">http://localhost:5500</code>）。</li>
+                    <li>此時，WebRTC 分享畫面與音訊功能便能 100% 正常解鎖！</li>
                 </ol>
             </div>
             <div class="flex space-x-3 pt-2">
                 <button onclick="openInNewTab()" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 text-sm">
                     <i data-lucide="external-link" class="w-4 h-4"></i>
-                    <span>在新分頁打開本站 (解鎖權限)</span>
+                    <span>嘗試在新分頁開啟 (Blob 模式)</span>
                 </button>
                 <button onclick="hideSafetyModal()" class="px-4 py-3 bg-gray-850 hover:bg-gray-800 border border-gray-800 text-gray-400 rounded-xl text-sm font-semibold transition-all">
                     關閉提示
@@ -360,6 +350,17 @@
                     </div>
                 </div>
 
+                <!-- 即時系統診斷日誌 -->
+                <div class="pt-4 border-t border-gray-800 flex flex-col space-y-2">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center space-x-1.5">
+                        <i data-lucide="terminal" class="w-4 h-4 text-emerald-400"></i>
+                        <span>實時系統日誌 (除錯專用)</span>
+                    </h4>
+                    <div id="system-log-terminal" class="h-28 bg-black/90 border border-gray-850 rounded-xl p-2.5 overflow-y-auto text-[11px] mono-font text-gray-400 space-y-1 select-text">
+                        <div class="text-gray-600">[系統] 診斷控制台已啟動...</div>
+                    </div>
+                </div>
+
                 <!-- 即時文字聊天室 -->
                 <div class="flex-1 flex flex-col min-h-[220px] pt-4 border-t border-gray-800">
                     <div class="flex items-center justify-between mb-3">
@@ -393,7 +394,7 @@
                     <span>如何確保完美的 60FPS 與 1080p？</span>
                 </p>
                 <ol class="list-decimal pl-4 space-y-1 text-gray-400 leading-relaxed">
-                    <li>選擇「<b>分享單個分頁</b>」通常能獲得最絲滑流暢的 60fps 體驗。</li>
+                    <li>選擇「<b>分享單個分頁</b>」通常能獲得最絲滑流暢 of 60fps 體驗。</li>
                     <li>分享時務必勾選「<b>同時分享系統音訊</b>」以便共享背景音樂或遊戲音。</li>
                     <li>確保兩端瀏覽器皆已開啟「<b>硬體加速</b>」（Hardware Acceleration）功能。</li>
                 </ol>
@@ -445,14 +446,51 @@
         let signalsCollection = null;
         let signalsUnsubscribe = null;
 
+        // 【全新硬編碼硬防禦】您的專屬 Firebase 密鑰，這樣任何人打開網頁都能免輸入直接使用！
+        const defaultFirebaseConfig = {
+            apiKey: "AIzaSyDMaRnD0yhjUZpMRXdqC_I-vWE2aQ_xs9U",
+            authDomain: "sharescreen-2fc87.firebaseapp.com",
+            projectId: "sharescreen-2fc87",
+            storageBucket: "sharescreen-2fc87.firebasestorage.app",
+            messagingSenderId: "481463992572",
+            appId: "1:481463992572:web:10ec2bc4ec342d29945779",
+            measurementId: "G-8S692QH1G2"
+        };
+
+        // 系統日誌寫入器
+        function logToSystem(message, type = 'info') {
+            const logBox = document.getElementById('system-log-terminal');
+            if (!logBox) return;
+            const time = new Date().toLocaleTimeString();
+            const colorClass = type === 'error' ? 'text-red-400 font-bold' : type === 'success' ? 'text-emerald-400 font-bold' : type === 'warning' ? 'text-amber-400' : 'text-gray-300';
+            const prefix = type === 'error' ? '[錯誤]' : type === 'success' ? '[成功]' : type === 'warning' ? '[警示]' : '[系統]';
+            
+            const logEl = document.createElement('div');
+            logEl.className = `${colorClass} py-0.5 border-b border-gray-950/40`;
+            logEl.innerHTML = `<span class="text-gray-600 font-normal">[${time}]</span> <span>${prefix}</span> ${message}`;
+            logBox.appendChild(logEl);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
         // 網頁載入初始化
         window.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
             document.getElementById('chat-user-tag').innerText = myNickname;
 
-            // 偵測是否處於 Iframe 中，顯示頂部警示橫幅
-            if (window.self !== window.top) {
+            // A. 安全上下文與環境偵測
+            const isSecure = window.isSecureContext;
+            const isLocalFile = window.location.protocol === 'file:';
+
+            if (isLocalFile) {
+                logToSystem("偵測到您目前是直接打開 HTML 檔案 (file://)。", "warning");
+                logToSystem("【重要】瀏覽器安全政策禁止在非安全網站分享螢幕，請務必架設本機伺服器，或部署至 GitHub (HTTPS)！", "error");
+                document.getElementById('banner-text').innerText = "安全警告：本機開啟(file://)不支援螢幕分享！請部署至 GitHub Pages 測試。";
                 document.getElementById('iframe-global-banner').classList.remove('hidden');
+            } else if (window.self !== window.top) {
+                logToSystem("偵測到網頁執行於 Gemini 編輯器沙盒(Iframe)中。", "info");
+                document.getElementById('iframe-global-banner').classList.remove('hidden');
+            } else {
+                logToSystem(`運作環境良好。網址協定: ${window.location.protocol}`, "success");
             }
 
             // 初始化 Firebase
@@ -471,18 +509,26 @@
         // 安全地開啟新分頁：在 Canvas 中使用 Blob URL 作為安全 Fallback
         function openInNewTab() {
             try {
-                if (window.location.protocol !== 'about:' && !window.location.href.startsWith('blob:')) {
+                if (window.location.protocol !== 'about:' && !window.location.href.startsWith('blob:') && window.location.protocol !== 'file:') {
                     window.open(window.location.href, '_blank');
                     return;
                 }
-                // 如果是 Sandbox，將當前 HTML 轉為 Blob URL 開啟
                 const htmlContent = document.documentElement.outerHTML;
                 const blob = new Blob([htmlContent], { type: 'text/html' });
                 const blobUrl = URL.createObjectURL(blob);
                 window.open(blobUrl, '_blank');
+                logToSystem("已產生安全的動態分頁，已繞過編輯器 iframe 限制！", "success");
             } catch (e) {
                 showToast("無法在新分頁中直接執行。請點選 Canvas 編輯器右上角的「Open in new tab」按鈕，或下載至本機執行！", "error");
             }
+        }
+
+        function showFirebaseConfigModal() {
+            document.getElementById('firebase-config-modal').classList.remove('hidden');
+        }
+
+        function hideFirebaseConfigModal() {
+            document.getElementById('firebase-config-modal').classList.add('hidden');
         }
 
         function showSafetyModal() {
@@ -493,38 +539,36 @@
             document.getElementById('safety-modal').classList.add('hidden');
         }
 
-        // 2. 初始化 Firebase (支援環境注入變數與本機/GitHub 密鑰精靈)
+        // 2. 初始化 Firebase (整合硬編碼、環境注入變數、LocalStorage)
         async function initFirebase() {
             try {
                 let firebaseConfig = null;
                 let isCustomConfig = false;
 
-                // A. 優先嘗試獲取系統動態注入的密鑰 (Canvas Preview 環境)
+                // A. 優先嘗試獲取 Gemini 沙盒動態注入的環境變數 (僅在 Canvas Preview 中有效)
                 if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                     firebaseConfig = JSON.parse(__firebase_config);
+                    logToSystem("已載入 Gemini 系統預設環境密鑰進行測試。", "success");
                 } 
-                // B. 若無，尋找本機 LocalStorage 中有無手動設定的自訂密鑰
+                // B. 其次尋找本機 LocalStorage 中有無手動設定的自訂密鑰
                 else {
                     const localSavedConfig = localStorage.getItem('custom_firebase_config');
                     if (localSavedConfig) {
                         firebaseConfig = JSON.parse(localSavedConfig);
                         isCustomConfig = true;
+                        logToSystem("成功載入本機 LocalStorage 保存的 Firebase 自訂設定。", "success");
+                    } else {
+                        // C. 若無自訂設定，直接套用您提供的專屬內建密鑰，免去所有設定步驟！
+                        firebaseConfig = defaultFirebaseConfig;
+                        logToSystem("已成功載入內建專屬 Firebase 配置！免設定直接啟用。", "success");
                     }
                 }
 
-                // C. 如果兩者皆無，立刻彈出「Firebase 自訂設定引導精靈」
-                if (!firebaseConfig) {
-                    updateStatus('error', '等待 Firebase 設定...');
-                    document.getElementById('firebase-config-modal').classList.remove('hidden');
-                    return;
-                }
+                // 顯示設定重設按鈕
+                document.getElementById('btn-reset-config').classList.remove('hidden');
 
-                // 關閉精靈視窗 (若是本機載入)
-                document.getElementById('firebase-config-modal').classList.add('hidden');
-                if (isCustomConfig) {
-                    document.getElementById('btn-reset-config').classList.remove('hidden');
-                }
-
+                logToSystem(`正在連結 Firebase 專案 [${firebaseConfig.projectId}]...`, "info");
+                
                 // 初始化 Firebase 實體
                 firebase.initializeApp(firebaseConfig);
                 auth = firebase.auth();
@@ -532,40 +576,50 @@
 
                 updateStatus('connecting', '正在建立加密安全通道...');
 
-                // 進行安全認證 (Anonymous 登入)
+                // 進行安全認證 (Anonymous 匿名登入)
                 let userCredential = null;
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    try {
+                logToSystem("正在向伺服器申請臨時安全憑證 (匿名登入)...", "info");
+                
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                         userCredential = await auth.signInWithCustomToken(__initial_auth_token);
-                    } catch (err) {
+                    } else {
                         userCredential = await auth.signInAnonymously();
                     }
-                } else {
-                    userCredential = await auth.signInAnonymously();
+                } catch (authError) {
+                    logToSystem(`認證失敗！錯誤原因：${authError.message}`, "error");
+                    logToSystem("請確認您的 Firebase 控制台 -> Authentication -> Sign-in Method，已啟用【匿名登入 (Anonymous)】！", "error");
+                    updateStatus('error', '匿名登入未啟用');
+                    showToast("Firebase 認證失敗，請檢查下方日誌診斷！", "error");
+                    return;
                 }
 
                 if (userCredential && userCredential.user) {
                     currentUser = userCredential.user;
-                    console.log("Firebase 認證成功，UID:", currentUser.uid);
+                    logToSystem(`安全憑證發放成功！您的臨時 UID: ${currentUser.uid}`, "success");
                     updateStatus('ready', '連線就緒，可以分享或加入');
                 } else {
                     throw new Error("未能成功取得認證使用者");
                 }
 
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-stream-app';
+                const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
                 
                 // 依照 Rule 1 的指定路徑格式
                 roomsCollection = db.collection('artifacts/' + appId + '/public/data/rooms');
                 signalsCollection = db.collection('artifacts/' + appId + '/public/data/signals');
+                
+                logToSystem("已成功對接 Cloud Firestore 信令資料庫。", "success");
 
             } catch (e) {
                 console.error("Firebase 初始化失敗:", e);
                 updateStatus('error', '資料庫連線失敗');
+                logToSystem(`資料庫對接失敗！錯誤詳情: ${e.message}`, "error");
+                logToSystem("提示：請確認您已在控制台建立【Firestore Database】(測試模式)！", "error");
                 showToast("Firebase 連線錯誤，請確認設定內容正確無誤。", "error");
             }
         }
 
-        // 保存手動貼入的自訂 Firebase 密鑰
+        // 保存手動貼入的自訂 Firebase 密鑰 (供進階切換使用)
         function saveCustomFirebaseConfig() {
             const textarea = document.getElementById('input-firebase-config');
             const rawValue = textarea.value.trim();
@@ -575,23 +629,19 @@
             }
 
             try {
-                // 嘗試解析 JSON 是否合法
                 let parsedConfig = {};
                 if (rawValue.includes('apiKey')) {
-                    // 如果使用者直接複製整段物件，嘗試清理並轉為 JSON
                     let jsonStr = rawValue;
                     if (!rawValue.startsWith('{')) {
-                        // 嘗試尋找括弧
                         const start = rawValue.indexOf('{');
                         const end = rawValue.lastIndexOf('}');
                         if (start !== -1 && end !== -1) {
                             jsonStr = rawValue.substring(start, end + 1);
                         }
                     }
-                    // 為了相容 JavaScript 物件格式與 strict JSON，進行簡單的正則修復
                     jsonStr = jsonStr
-                        .replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":') // 幫 Key 加上雙引號
-                        .replace(/'/g, '"'); // 單引號轉雙引號
+                        .replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":') 
+                        .replace(/'/g, '"'); 
                     
                     parsedConfig = JSON.parse(jsonStr);
                 } else {
@@ -602,25 +652,23 @@
                     throw new Error("遺失必要屬性 (apiKey / projectId)");
                 }
 
-                // 儲存至本機
                 localStorage.setItem('custom_firebase_config', JSON.stringify(parsedConfig));
                 showToast("設定成功！正在重試初始化...", "success");
                 
-                // 刷新網頁套用新設定
                 setTimeout(() => {
                     window.location.reload();
                 }, 1000);
 
             } catch (e) {
-                showToast("JSON 格式解析錯誤，請確認內容符合正確的 JavaScript / JSON 格式！", "error");
+                showToast("JSON 格式解析錯誤，請確認內容符合正確的 JSON 格式！", "error");
                 console.error(e);
             }
         }
 
-        // 清除自訂 Firebase 設定並重新設定
+        // 清除自訂 Firebase 設定，還原回預設內建
         function clearCustomFirebaseConfig() {
             localStorage.removeItem('custom_firebase_config');
-            showToast("已清除自訂設定，請重新配置...", "info");
+            showToast("已還原為預設內建專屬 Firebase 設定！", "info");
             setTimeout(() => {
                 window.location.reload();
             }, 1000);
@@ -652,6 +700,7 @@
         async function startScreenShare() {
             if (!currentUser || !roomsCollection) {
                 showToast("安全登入尚未就緒，請稍候或設定 Firebase...", "info");
+                logToSystem("啟動失敗：認證程序尚未就緒，請確認日誌中是否有報錯資訊。", "error");
                 return;
             }
 
@@ -673,20 +722,24 @@
             };
 
             try {
+                logToSystem("正在發起系統螢幕與音效擷取請求...", "info");
                 updateStatus('connecting', '正在擷取系統螢幕與音效...');
                 
                 // 呼叫瀏覽器 API 擷取螢幕
                 activeStream = await navigator.mediaDevices.getDisplayMedia(captureConstraints);
+                logToSystem("螢幕與音訊擷取成功！", "success");
                 
                 // 產生一個好記的 6 位數房號
                 myRoomId = Math.floor(100000 + Math.random() * 900000).toString();
                 
+                logToSystem(`正在註冊 6 位數房間編號 [${myRoomId}] 至 Cloud Firestore...`, "info");
                 // 在 Firestore 中註冊此房號
                 await roomsCollection.doc(myRoomId).set({
                     hostId: currentUser.uid,
                     active: true,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
+                logToSystem(`房間 [${myRoomId}] 註冊成功，現正等待觀眾加入！`, "success");
 
                 showToast("螢幕共享已啟動！房間號碼為: " + myRoomId, "success");
                 updateStatus('live', '正在同步直播：' + myRoomId);
@@ -711,6 +764,7 @@
             } catch (err) {
                 console.error("螢幕擷取錯誤:", err);
                 updateStatus('ready', '連線就緒，可以分享或加入');
+                logToSystem(`螢幕擷取失敗：${err.name} - ${err.message}`, "error");
                 
                 // 檢查是否為 Iframe 限制所引起的安全拒絕
                 if (window.self !== window.top || err.name === 'NotAllowedError' || err.name === 'SecurityError') {
@@ -728,6 +782,8 @@
             if (signalsUnsubscribe) signalsUnsubscribe();
             if (!currentUser) return; 
 
+            logToSystem("已啟動 WebRTC P2P 實時訊號監聽器。", "info");
+
             signalsUnsubscribe = signalsCollection.onSnapshot((snapshot) => {
                 snapshot.docChanges().forEach(async (change) => {
                     if (change.type === 'added') {
@@ -740,7 +796,7 @@
                             const fromViewer = data.from;
 
                             if (data.type === 'offer') {
-                                console.log('收到來自觀眾的 Offer 請求:', fromViewer);
+                                logToSystem(`收到來自觀眾 [${fromViewer}] 的連線請求 (Offer SDP)`, "info");
 
                                 const pc = new RTCPeerConnection(rtcConfig);
                                 peerConnections[fromViewer] = pc;
@@ -784,6 +840,7 @@
                                         sdp: JSON.stringify(answer),
                                         timestamp: firebase.firestore.FieldValue.serverTimestamp()
                                     });
+                                    logToSystem(`已向觀眾 [${fromViewer}] 回傳連線密鑰 (Answer SDP)`, "success");
                                 }
 
                                 updateViewerCount(1);
@@ -803,12 +860,13 @@
                     }
                 });
             }, (err) => {
-                console.error("Firestore 信令監聽失敗:", err);
+                logToSystem(`信令監聽故障，請檢查 Firestore 權限。錯誤: ${err.message}`, "error");
             });
         }
 
         // Host 結束分享
         async function stopScreenShare() {
+            logToSystem("終止畫面共享，正在清理連線頻道...", "info");
             if (activeStream) {
                 activeStream.getTracks().forEach(track => track.stop());
                 activeStream = null;
@@ -835,6 +893,7 @@
         async function joinRoom() {
             if (!currentUser || !roomsCollection) {
                 showToast("安全登入尚未就緒，請稍候或設定 Firebase...", "info");
+                logToSystem("加入失敗：連線程序尚未就緒，請確認日誌中是否有報錯資訊。", "error");
                 return;
             }
 
@@ -844,17 +903,21 @@
                 return;
             }
 
+            logToSystem(`正在 Firestore 查詢房間代碼 [${hostId}] 是否存在...`, "info");
             updateStatus('connecting', '正在查詢房間狀態...');
             targetRoomId = hostId;
 
             try {
                 const roomDoc = await roomsCollection.doc(hostId).get();
                 if (!roomDoc.exists || !roomDoc.data().active) {
+                    logToSystem(`房號 [${hostId}] 不存在，或主播已結束畫面分享。`, "error");
                     showToast("找不到該房間，或對方已結束畫面分享！", "error");
                     updateStatus('ready', '連線就緒，可以分享或加入');
                     return;
                 }
 
+                logToSystem(`房號 [${hostId}] 驗證成功！主播 UID: ${roomDoc.data().hostId}`, "success");
+                logToSystem("正在發起實時 P2P WebRTC 連線協調...", "info");
                 updateStatus('connecting', '正在協調點對點實時通道...');
 
                 const pc = new RTCPeerConnection(rtcConfig);
@@ -862,6 +925,7 @@
 
                 const remoteStream = new MediaStream();
                 pc.ontrack = (event) => {
+                    logToSystem("成功獲取到分享者的視訊與音訊軌道！", "success");
                     event.streams[0].getTracks().forEach(track => {
                         remoteStream.addTrack(track);
                     });
@@ -871,8 +935,9 @@
                 };
 
                 pc.onconnectionstatechange = () => {
-                    console.log("WebRTC 連線狀態:", pc.connectionState);
+                    logToSystem(`WebRTC 連線狀態變更為: ${pc.connectionState}`, "info");
                     if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+                        logToSystem("P2P 實時通道中斷關閉。", "warning");
                         showToast("與分享端的連線已中斷。", "info");
                         resetToWaitingState();
                     }
@@ -894,6 +959,7 @@
                     }
                 };
 
+                // 產生連線 Offer
                 const offer = await pc.createOffer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
                 await pc.setLocalDescription(offer);
 
@@ -906,12 +972,14 @@
                         sdp: JSON.stringify(offer),
                         timestamp: firebase.firestore.FieldValue.serverTimestamp()
                     });
+                    logToSystem("已將您的 Offer SDP 密鑰寫入資料庫，等待主播答覆中...", "info");
                 }
 
                 startViewerSignalingListener(pc);
 
             } catch (err) {
                 console.error("加入房間失敗:", err);
+                logToSystem(`無法建立連線：${err.message}`, "error");
                 showToast("連線發生錯誤: " + err.message, "error");
                 updateStatus('ready', '連線就緒，可以分享或加入');
             }
@@ -928,7 +996,7 @@
 
                         if (data.roomId === targetRoomId && data.to === viewerId && data.from === 'host') {
                             if (data.type === 'answer' && pc.signalingState === 'have-local-offer') {
-                                console.log('收到 Host 的 Answer，套用中...');
+                                logToSystem("已獲得主播答覆 (Answer SDP)，正套用至您的瀏覽器...", "success");
                                 const answerDesc = JSON.parse(data.sdp);
                                 await pc.setRemoteDescription(new RTCSessionDescription(answerDesc));
                             } 
@@ -937,14 +1005,14 @@
                                     const candidate = JSON.parse(data.candidate);
                                     await pc.addIceCandidate(new RTCIceCandidate(candidate));
                                 } catch (e) {
-                                    console.warn("套用 ICE 失敗 (可忽略):", e);
+                                    console.warn("套用 ICE 失敗:", e);
                                 }
                             }
                         }
                     }
                 });
             }, (err) => {
-                console.error("Viewer 訂閱信令失敗:", err);
+                logToSystem(`信令接收失敗。錯誤: ${err.message}`, "error");
             });
         }
 
@@ -971,7 +1039,7 @@
                 activeDataChannel = dc;
 
                 dc.onopen = () => {
-                    console.log('與分享端的 Chat 資料通道已開通。');
+                    logToSystem("P2P 極速文字互動通道已成功開通！", "success");
                     enableChat();
                     appendChatMessage("系統提示", "已建立極速低延遲通道，快打聲招呼吧！");
                 };
@@ -1012,6 +1080,7 @@
             input.value = '';
         }
 
+        // 廣播
         function broadcastMessage(msgObj, excludePeerId = null) {
             const dataStr = JSON.stringify(msgObj);
             if (currentRole === 'host') {
