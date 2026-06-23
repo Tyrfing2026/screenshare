@@ -298,6 +298,33 @@
                                 <option value="30">30 FPS (標準畫質)</option>
                             </select>
                         </div>
+
+                        <!-- [全新增] 體育與高動態影音解鎖引擎設定 -->
+                        <div class="bg-indigo-950/20 border border-indigo-800/40 p-3.5 rounded-xl space-y-3">
+                            <div class="flex items-center space-x-2 text-indigo-400">
+                                <i data-lucide="tv-2" class="w-4 h-4"></i>
+                                <span class="text-xs font-bold uppercase tracking-wider">⚽ 體育/高動態優化引擎</span>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">1. 串流傳輸模式 (Content Hint)</label>
+                                <select id="config-content-hint" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-indigo-500">
+                                    <option value="motion">體育賽事、電影、高流暢運動優先 (Motion)</option>
+                                    <option value="detail">簡報、網頁、程式碼靜態細節優先 (Detail)</option>
+                                </select>
+                                <p class="text-[10px] text-gray-500 mt-1">「運動優先」可解決鏡頭快速旋轉與平移時的馬賽克。</p>
+                            </div>
+
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">2. 最大傳輸碼率 (Max Bitrate)</label>
+                                <select id="config-max-bitrate" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-indigo-500">
+                                    <option value="12000">🚀 極致超高畫質 (12 Mbps，適合體育賽事)</option>
+                                    <option value="8000">✨ 動態流暢高品質 (8 Mbps，推薦 1080p60)</option>
+                                    <option value="4000">📶 標準高清流暢 (4 Mbps)</option>
+                                    <option value="2000">📉 省流量/普通網路 (2 Mbps)</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- 按鈕動作區 -->
@@ -395,7 +422,7 @@
                 </p>
                 <ol class="list-decimal pl-4 space-y-1 text-gray-400 leading-relaxed">
                     <li>選擇「<b>分享單個分頁</b>」通常能獲得最絲滑流暢 of 60fps 體驗。</li>
-                    <li>分享時務必勾選「<b>同時分享系統音訊</b>」以便共享背景音樂或遊戲音。</li>
+                    <li>分享時務必勾選「<b>同時分享系統音訊</b>」以便共享背景音樂 or 遊戲音。</li>
                     <li>確保兩端瀏覽器皆已開啟「<b>硬體加速</b>」（Hardware Acceleration）功能。</li>
                 </ol>
             </div>
@@ -446,7 +473,7 @@
         let signalsCollection = null;
         let signalsUnsubscribe = null;
 
-        // 【全新硬編碼硬防禦】您的專屬 Firebase 密鑰，這樣任何人打開網頁都能免輸入直接使用！
+        // 【全新硬編碼硬防禦】您的專屬 Firebase 密鑰
         const defaultFirebaseConfig = {
             apiKey: "AIzaSyDMaRnD0yhjUZpMRXdqC_I-vWE2aQ_xs9U",
             authDomain: "sharescreen-2fc87.firebaseapp.com",
@@ -597,7 +624,7 @@
                 if (userCredential && userCredential.user) {
                     currentUser = userCredential.user;
                     logToSystem(`安全憑證發放成功！您的臨時 UID: ${currentUser.uid}`, "success");
-                    updateStatus('ready', '連線就緒，可以分享或加入');
+                    updateStatus('ready', '連線就緒，可以分享 or 加入');
                 } else {
                     throw new Error("未能成功取得認證使用者");
                 }
@@ -674,6 +701,57 @@
             }, 1000);
         }
 
+        // 獨家頻寬優化技術：將帶寬設定注入 SDP (Session Description Protocol)
+        function setSdpMediaBitrate(sdp, media, bitrateKbps) {
+            const lines = sdp.split("\r\n");
+            let mediaIndex = -1;
+            
+            // 尋找視訊軌道 m=video 起始點
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].indexOf("m=" + media) === 0) {
+                    mediaIndex = i;
+                    break;
+                }
+            }
+            if (mediaIndex === -1) return sdp;
+
+            // 強力插入或取代 b=AS 屬性，通知瀏覽器釋放頻寬
+            logToSystem(`[SDP優化] 已將視訊上傳頻寬限制修改並解鎖至 ${bitrateKbps} Kbps`, "success");
+            lines.splice(mediaIndex + 1, 0, `b=AS:${bitrateKbps}`);
+            lines.splice(mediaIndex + 2, 0, `b=TIAS:${bitrateKbps * 1000}`);
+            
+            return lines.join("\r\n");
+        }
+
+        // [全新增] 動態更新 WebRTC 的硬體編碼器傳輸限制 (RtpSender.setParameters)
+        async function applyDynamicEncodingOptimizations(pc) {
+            if (!pc) return;
+            const targetKbps = parseInt(document.getElementById('config-max-bitrate').value);
+            const targetFps = parseInt(document.getElementById('config-fps').value);
+
+            const senders = pc.getSenders();
+            for (const sender of senders) {
+                if (sender.track && sender.track.kind === 'video') {
+                    try {
+                        const parameters = sender.getParameters();
+                        if (!parameters.encodings) {
+                            parameters.encodings = [{}];
+                        }
+                        
+                        // 設定極致頻寬 (Bps) 與最大 FPS
+                        parameters.encodings[0].maxBitrate = targetKbps * 1000;
+                        parameters.encodings[0].maxFramerate = targetFps;
+                        parameters.encodings[0].priority = "high"; // 提高頻寬調度優先權
+                        
+                        await sender.setParameters(parameters);
+                        logToSystem(`[編碼優化] 顯卡編碼器已套用：最大碼率 ${targetKbps / 1000} Mbps, FPS 限制為 ${targetFps} FPS`, "success");
+                    } catch (e) {
+                        console.warn("顯卡編碼調諧失敗 (可能不支援 on-the-fly 控制):", e);
+                    }
+                }
+            }
+        }
+
         // 3. 角色與切換面板
         function switchRole(role) {
             currentRole = role;
@@ -706,6 +784,7 @@
 
             const targetRes = document.getElementById('config-resolution').value;
             const targetFps = document.getElementById('config-fps').value;
+            const contentHintMode = document.getElementById('config-content-hint').value;
 
             // 超高規格 WebRTC 螢幕共享擷取設定
             const captureConstraints = {
@@ -728,6 +807,13 @@
                 // 呼叫瀏覽器 API 擷取螢幕
                 activeStream = await navigator.mediaDevices.getDisplayMedia(captureConstraints);
                 logToSystem("螢幕與音訊擷取成功！", "success");
+
+                // [體育賽事獨家電競級優化]：套用 ContentHint
+                const videoTrack = activeStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    videoTrack.contentHint = contentHintMode;
+                    logToSystem(`[高流暢優化] 視訊軌道 ContentHint 已切換為：【${contentHintMode === 'motion' ? '⚽體育動態優先' : '📄靜態細節優先'}】`, "success");
+                }
                 
                 // 產生一個好記的 6 位數房號
                 myRoomId = Math.floor(100000 + Math.random() * 900000).toString();
@@ -829,7 +915,15 @@
                                 await pc.setRemoteDescription(new RTCSessionDescription(offerDesc));
 
                                 const answer = await pc.createAnswer();
+                                
+                                // 【優化碼率】寫入 SDP 頻寬限制
+                                const maxKbps = parseInt(document.getElementById('config-max-bitrate').value);
+                                answer.sdp = setSdpMediaBitrate(answer.sdp, "video", maxKbps);
+
                                 await pc.setLocalDescription(answer);
+
+                                // 連線完後套用動態 RtpSender 優化
+                                await applyDynamicEncodingOptimizations(pc);
 
                                 if (currentUser) {
                                     await signalsCollection.add({
@@ -1080,7 +1174,6 @@
             input.value = '';
         }
 
-        // 廣播
         function broadcastMessage(msgObj, excludePeerId = null) {
             const dataStr = JSON.stringify(msgObj);
             if (currentRole === 'host') {
@@ -1191,6 +1284,7 @@
             lucide.createIcons();
         }
 
+        // 變更靜音
         function toggleMuteState() {
             const video = document.getElementById('shared-video');
             const icon = document.getElementById('btn-toggle-mute').querySelector('i');
