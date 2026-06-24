@@ -41,6 +41,16 @@
 </head>
 <body class="text-gray-100 min-h-screen flex flex-col">
 
+    <!-- Iframe / file:// 頂部強烈警告橫幅 (專治安全上下文限制) -->
+    <div id="iframe-global-banner" class="hidden bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 px-4 py-2.5 text-center text-sm font-semibold text-white flex flex-wrap items-center justify-center gap-2 shadow-lg z-50">
+        <i data-lucide="alert-octagon" class="w-5 h-5 animate-pulse"></i>
+        <span id="banner-text">瀏覽器安全限制：螢幕分享功能【必須在獨立分頁且為 HTTPS 或 localhost】下執行！</span>
+        <button onclick="openInNewTab()" class="px-3 py-1 bg-white text-orange-700 hover:bg-gray-100 transition-all rounded-lg text-xs font-bold shadow-md flex items-center gap-1">
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+            在新分頁開啟 / 解鎖限制
+        </button>
+    </div>
+
     <!-- 頂部導覽列 -->
     <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center space-x-3">
@@ -516,10 +526,8 @@
                     throw new Error("Firebase SDK 載入失敗！您的瀏覽器或廣告攔截器阻擋了連線。");
                 }
 
-                // 100% 直接套用 GitHub 專屬內建密鑰，免去所有自訂輸入彈窗步驟
                 const firebaseConfig = defaultFirebaseConfig;
                 logToSystem("已成功對接預設 Firebase 設定！", "success");
-
                 logToSystem(`正在連結 Firebase 專案 [${firebaseConfig.projectId}]...`, "info");
                 
                 // 初始化 Firebase 實體，防禦重複初始化錯誤
@@ -877,7 +885,7 @@
 
             const hostId = document.getElementById('input-host-id').value.trim();
             if (hostId.length !== 6) {
-                showToast("請輸入正確的 6 位數房間代碼！", "error");
+                showToast("請輸入正確 of 6 位數房間代碼！", "error");
                 return;
             }
 
@@ -1300,7 +1308,71 @@
             }
         }
 
-        // 10. 全新重構：解決熱重載 DOM Ready 安全啟動與防止重複初始化機制
+        // 10. 自訂 Toast 通知 (全新修復！)
+        let toastTimeout = null;
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('notification-toast');
+            const iconContainer = document.getElementById('toast-icon');
+            const msgEl = document.getElementById('toast-message');
+
+            if (!toast || !iconContainer || !msgEl) return;
+            msgEl.innerText = message;
+
+            if (type === 'success') {
+                toast.className = "fixed top-24 right-6 z-50 transform transition-transform duration-300 ease-out flex items-center p-4 space-x-3 bg-gray-900 border-l-4 border-emerald-500 rounded-lg shadow-xl max-w-sm z-50";
+                iconContainer.innerHTML = '<i data-lucide="check-circle" class="w-6 h-6 text-emerald-400"></i>';
+            } else if (type === 'error') {
+                toast.className = "fixed top-24 right-6 z-50 transform transition-transform duration-300 ease-out flex items-center p-4 space-x-3 bg-gray-900 border-l-4 border-red-500 rounded-lg shadow-xl max-w-sm z-50";
+                iconContainer.innerHTML = '<i data-lucide="x-circle" class="w-6 h-6 text-red-400"></i>';
+            } else {
+                toast.className = "fixed top-24 right-6 z-50 transform transition-transform duration-300 ease-out flex items-center p-4 space-x-3 bg-gray-900 border-l-4 border-indigo-500 rounded-lg shadow-xl max-w-sm z-50";
+                iconContainer.innerHTML = '<i data-lucide="info" class="w-6 h-6 text-indigo-400"></i>';
+            }
+
+            lucide.createIcons();
+            toast.classList.remove('translate-x-full');
+
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                hideToast();
+            }, 5000);
+        }
+
+        function hideToast() {
+            const toast = document.getElementById('notification-toast');
+            if (toast) toast.classList.add('translate-x-full');
+        }
+
+        // [本機/環境設定備用函數]
+        function clearCustomFirebaseConfig() {
+            localStorage.removeItem('custom_firebase_config');
+            showToast("已還原為預設內建專屬 Firebase 設定！", "info");
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        }
+        function saveCustomFirebaseConfig() {
+            const textarea = document.getElementById('input-firebase-config');
+            const rawValue = textarea ? textarea.value.trim() : '';
+            if (!rawValue) {
+                showToast("請輸入有效的 Firebase Config JSON 內容！", "error");
+                return;
+            }
+            try {
+                let parsedConfig = JSON.parse(rawValue);
+                localStorage.setItem('custom_firebase_config', JSON.stringify(parsedConfig));
+                showToast("設定成功！正在重試初始化...", "success");
+                setTimeout(() => window.location.reload(), 1000);
+            } catch (e) {
+                showToast("JSON 格式解析錯誤！", "error");
+            }
+        }
+        function hideFirebaseConfigModal() {
+            const el = document.getElementById('firebase-config-modal');
+            if (el) el.classList.add('hidden');
+        }
+
+        // 11. 全新重構：解決熱重載 DOM Ready 安全啟動與防止重複初始化機制
         async function initApp() {
             lucide.createIcons();
             
@@ -1309,7 +1381,7 @@
                 userTag.innerText = myNickname;
             }
 
-            // 初始化 Firebase 實例並建立 P2P 信道
+            // 初始化 Firebase 實體並建立 P2P 信道
             await initFirebase();
 
             // 檢查 URL 房間代碼
