@@ -285,10 +285,10 @@
             <!-- 模式切換器 -->
             <div class="flex p-1 bg-gray-950 border border-gray-800 rounded-xl">
                 <button id="tab-host" onclick="switchRole('host')" class="flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all bg-indigo-600 text-white shadow-md">
-                    我要分享
+                    I want to share
                 </button>
                 <button id="tab-viewer" onclick="switchRole('viewer')" class="flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all text-gray-400 hover:text-gray-200">
-                    我要觀看
+                    I want to watch
                 </button>
             </div>
 
@@ -975,7 +975,7 @@
         // Host 廣播人數同步
         function broadcastViewerCount(excludePeerId = null) {
             const msgObj = {
-                type: 'viewer_count',
+                type: 'viewer_count_update',
                 count: activeViewersList.size
             };
             broadcastMessage(msgObj, excludePeerId);
@@ -1389,7 +1389,7 @@
             
             video.srcObject = null;
             video.classList.add('hidden');
-            placeholder.classList.remove('hidden');
+            placeholder.classList.add('hidden');
 
             document.getElementById('btn-start-share').classList.remove('hidden');
             document.getElementById('btn-stop-share').classList.add('hidden');
