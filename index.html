@@ -285,10 +285,10 @@
             <!-- 模式切換器 -->
             <div class="flex p-1 bg-gray-950 border border-gray-800 rounded-xl">
                 <button id="tab-host" onclick="switchRole('host')" class="flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all bg-indigo-600 text-white shadow-md">
-                    I want to share
+                    我要分享
                 </button>
                 <button id="tab-viewer" onclick="switchRole('viewer')" class="flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all text-gray-400 hover:text-gray-200">
-                    I want to watch
+                    我要觀看
                 </button>
             </div>
 
@@ -574,45 +574,6 @@
             hideNicknameModal();
             joinRoom();
         }
-
-        // 網頁載入初始化
-        window.addEventListener('DOMContentLoaded', async () => {
-            lucide.createIcons();
-            document.getElementById('chat-user-tag').innerText = myNickname;
-
-            // A. 安全上下文與環境偵測
-            const isSecure = window.isSecureContext;
-            const isLocalFile = window.location.protocol === 'file:';
-
-            if (isLocalFile) {
-                logToSystem("偵測到您目前是直接打開 HTML 檔案 (file://)。", "warning");
-                logToSystem("【重要】瀏覽器安全政策禁止在非安全網站分享螢幕，請務必架設本機伺服器，或部署至 GitHub (HTTPS)！", "error");
-                document.getElementById('banner-text').innerText = "安全警告：本機開啟(file://)不支援螢幕分享！請部署至 GitHub Pages 測試。";
-                document.getElementById('iframe-global-banner').classList.remove('hidden');
-            } else if (!isSecure && !isLocalFile && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                logToSystem("偵測到您使用的是非加密 HTTP 連線！", "warning");
-                logToSystem("【安全警告】WebRTC 與螢幕分享功能在非安全連線 (HTTP) 下會被瀏覽器強制鎖定，請務必使用 HTTPS 連線！", "error");
-                document.getElementById('banner-text').innerText = "安全警告：非 HTTPS 加密連線不支援螢幕分享！請使用 HTTPS 測試。";
-                document.getElementById('iframe-global-banner').classList.remove('hidden');
-            } else if (window.self !== window.top) {
-                logToSystem("偵測到網頁執行於 編輯器沙盒(Iframe)中。", "info");
-                document.getElementById('iframe-global-banner').classList.remove('hidden');
-            } else {
-                logToSystem(`運作環境良好。網址協定: ${window.location.protocol}`, "success");
-            }
-
-            // 初始化 Firebase
-            await initFirebase();
-
-            // 檢查 URL 參數中是否帶有房間號碼 (例如: ?room=123456)
-            const urlParams = new URLSearchParams(window.location.search);
-            const roomFromUrl = urlParams.get('room') || window.location.hash.substring(1);
-            if (roomFromUrl && roomFromUrl.length === 6) {
-                switchRole('viewer');
-                document.getElementById('input-host-id').value = roomFromUrl;
-                showToast("已自動載入房號 " + roomFromUrl + "，請點選「加入共享看播」！", "info");
-            }
-        });
 
         // 異步逾時控制保護（防禦卡死）
         const timeoutPromise = (promise, ms, errorMsg) => {
@@ -1009,6 +970,28 @@
             showToast("已停止畫面共享。", "info");
         }
 
+        // 3. 角色與切換面板
+        function switchRole(role) {
+            currentRole = role;
+            const tabHost = document.getElementById('tab-host');
+            const tabViewer = document.getElementById('tab-viewer');
+            const panelHost = document.getElementById('panel-host');
+            const panelViewer = document.getElementById('panel-viewer');
+
+            if (role === 'host') {
+                tabHost.className = "flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all bg-indigo-600 text-white shadow-md";
+                tabViewer.className = "flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all text-gray-400 hover:text-gray-200";
+                panelHost.classList.remove('hidden');
+                panelViewer.classList.add('hidden');
+                updateShareUrl();
+            } else {
+                tabHost.className = "flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all text-gray-400 hover:text-gray-200";
+                tabViewer.className = "flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all bg-emerald-600 text-white shadow-md";
+                panelHost.classList.add('hidden');
+                panelViewer.classList.remove('hidden');
+            }
+        }
+
         // VIEWER (觀看端) 邏輯：加入房間
         async function joinRoom() {
             if (!currentUser || !roomsCollection) {
@@ -1389,7 +1372,7 @@
             
             video.srcObject = null;
             video.classList.add('hidden');
-            placeholder.classList.add('hidden');
+            placeholder.classList.remove('hidden');
 
             document.getElementById('btn-start-share').classList.remove('hidden');
             document.getElementById('btn-stop-share').classList.add('hidden');
@@ -1435,40 +1418,6 @@
             if (countEl) {
                 countEl.innerText = activeViewersList.size + ' 人';
             }
-        }
-
-        // 10. 自訂 Toast 通知
-        let toastTimeout = null;
-        function showToast(message, type = 'info') {
-            const toast = document.getElementById('notification-toast');
-            const iconContainer = document.getElementById('toast-icon');
-            const msgEl = document.getElementById('toast-message');
-
-            msgEl.innerText = message;
-
-            if (type === 'success') {
-                toast.className = "fixed top-24 right-6 z-50 transform transition-transform duration-300 ease-out flex items-center p-4 space-x-3 bg-gray-900 border-l-4 border-emerald-500 rounded-lg shadow-xl max-w-sm";
-                iconContainer.innerHTML = '<i data-lucide="check-circle" class="w-6 h-6 text-emerald-400"></i>';
-            } else if (type === 'error') {
-                toast.className = "fixed top-24 right-6 z-50 transform transition-transform duration-300 ease-out flex items-center p-4 space-x-3 bg-gray-900 border-l-4 border-red-500 rounded-lg shadow-xl max-w-sm";
-                iconContainer.innerHTML = '<i data-lucide="x-circle" class="w-6 h-6 text-red-400"></i>';
-            } else {
-                toast.className = "fixed top-24 right-6 z-50 transform transition-transform duration-300 ease-out flex items-center p-4 space-x-3 bg-gray-900 border-l-4 border-indigo-500 rounded-lg shadow-xl max-w-sm";
-                iconContainer.innerHTML = '<i data-lucide="info" class="w-6 h-6 text-indigo-400"></i>';
-            }
-
-            lucide.createIcons();
-            toast.classList.remove('translate-x-full');
-
-            if (toastTimeout) clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(() => {
-                hideToast();
-            }, 5000);
-        }
-
-        function hideToast() {
-            const toast = document.getElementById('notification-toast');
-            toast.classList.add('translate-x-full');
         }
     </script>
 </body>
