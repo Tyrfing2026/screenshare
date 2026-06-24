@@ -618,7 +618,7 @@
                         try {
                             firebaseConfig = JSON.parse(localSavedConfig);
                             isCustomConfig = true;
-                            logToSystem("成功載入本機 LocalStorage 保存的 Firebase 自訂設定。", "success");
+                            logToSystem("成功載入本機 LocalStorage 保存的 Firebase 設定。", "success");
                         } catch (parseErr) {
                             logToSystem("LocalStorage 密鑰格式損毀，還原預設值。", "warning");
                         }
@@ -636,21 +636,31 @@
 
                 logToSystem(`正在連結 Firebase 專案 [${firebaseConfig.projectId || '未知'}]...`, "info");
                 
-                // 初始化 Firebase 實體
-                firebase.initializeApp(firebaseConfig);
+                // 初始化 Firebase 實體，防禦重複初始化錯誤
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                
                 auth = firebase.auth();
                 db = firebase.firestore();
 
                 updateStatus('connecting', '正在建立加密安全通道...');
 
-                // 進行安全認證 (Anonymous 匿名登入)
+                // 進行安全認證 (優先採用環境憑證登入，出錯自動降級安全匿名登入，防止阻塞)
                 let userCredential = null;
-                logToSystem("正在向伺服器申請臨時安全憑證 (匿名登入)...", "info");
+                logToSystem("正在向伺服器申請臨時安全憑證 (登入)...", "info");
                 
                 try {
-                    const loginPromise = (typeof __initial_auth_token !== 'undefined' && __initial_auth_token)
-                        ? auth.signInWithCustomToken(__initial_auth_token)
-                        : auth.signInAnonymously();
+                    let loginPromise;
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        logToSystem("偵測到系統環境憑證，正在嘗試安全憑證登入...", "info");
+                        loginPromise = auth.signInWithCustomToken(__initial_auth_token).catch(err => {
+                            logToSystem(`環境憑證登入失敗: ${err.message}，正自動切換至安全匿名登入...`, "warning");
+                            return auth.signInAnonymously();
+                        });
+                    } else {
+                        loginPromise = auth.signInAnonymously();
+                    }
 
                     // 10 秒強制定時超時保護，拒絕無限期卡死在 "安全初始化中..."
                     userCredential = await timeoutPromise(
@@ -734,7 +744,7 @@
                         parameters.encodings[0].priority = "high";
                         
                         await sender.setParameters(parameters);
-                        logToSystem(`[編碼優化] 顯卡編碼器已套用：最大碼率 ${targetKbps / 1000} Mbps, FPS 限制為 ${targetFps} FPS`, "success");
+                        logToSystem(`[編碼優化] 貼心優化硬體編碼器參數。`, "success");
                     } catch (e) {
                         console.warn("顯卡編碼調諧失敗:", e);
                     }
@@ -912,7 +922,7 @@
                                     logToSystem(`已向觀眾 [${fromViewer}] 回傳連線密鑰 (Answer SDP)`, "success");
                                 }
 
-                                updateViewerCount(1);
+                                updateViewerCount();
                             } 
                             else if (data.type === 'candidate') {
                                 const pc = peerConnections[fromViewer];
@@ -1418,6 +1428,63 @@
             if (countEl) {
                 countEl.innerText = activeViewersList.size + ' 人';
             }
+        }
+
+        // 10. 全新重構：解決熱重載 DOM Ready 安全啟動與防止重複初始化機制
+        async function initApp() {
+            lucide.createIcons();
+            
+            const userTag = document.getElementById('chat-user-tag');
+            if (userTag) {
+                userTag.innerText = myNickname;
+            }
+
+            // 安全上下文與環境偵測
+            const isLocalFile = window.location.protocol === 'file:';
+            if (isLocalFile) {
+                logToSystem("偵測到您目前是直接打開 HTML 檔案 (file://)。", "warning");
+                logToSystem("【重要】瀏覽器安全政策禁止在非安全網站分享螢幕，請務必架設本機伺服器，或部署至 GitHub (HTTPS)！", "error");
+                
+                const bannerText = document.getElementById('banner-text');
+                if (bannerText) {
+                    bannerText.innerText = "安全警告：本機開啟(file://)不支援螢幕分享！請部署至 GitHub Pages 測試。";
+                }
+                
+                const globalBanner = document.getElementById('iframe-global-banner');
+                if (globalBanner) {
+                    globalBanner.classList.remove('hidden');
+                }
+            } else if (window.self !== window.top) {
+                logToSystem("偵測到網頁執行於 編輯器沙盒(Iframe)中。", "info");
+                const globalBanner = document.getElementById('iframe-global-banner');
+                if (globalBanner) {
+                    globalBanner.classList.remove('hidden');
+                }
+            } else {
+                logToSystem(`運作環境良好。網址協定: ${window.location.protocol}`, "success");
+            }
+
+            // 初始化 Firebase
+            await initFirebase();
+
+            // 檢查 URL 房間代碼
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomFromUrl = urlParams.get('room') || window.location.hash.substring(1);
+            if (roomFromUrl && roomFromUrl.length === 6) {
+                switchRole('viewer');
+                const hostIdInput = document.getElementById('input-host-id');
+                if (hostIdInput) {
+                    hostIdInput.value = roomFromUrl;
+                }
+                showToast("已自動載入房號 " + roomFromUrl + "，請點選「加入共享看播」！", "info");
+            }
+        }
+
+        // 啟動哨兵：同時偵測並應對「DOM 已經就緒（Complete）」的時機競爭情況
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            initApp();
+        } else {
+            window.addEventListener('DOMContentLoaded', initApp);
         }
     </script>
 </body>
