@@ -8,10 +8,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide 圖標庫 -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- 使用 Firebase SDK 替代 WebSockets 信令 -->
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
+    <!-- 使用高度穩定的 v10 Compat SDK 確保極致載入相容性 -->
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap');
         body {
@@ -145,6 +145,43 @@
         </div>
     </div>
 
+    <!-- 觀看者設定暱稱引導彈窗 (預設隨機酷炫動物名字) -->
+    <div id="nickname-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md hidden">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
+            <div class="flex items-center space-x-3 text-indigo-400">
+                <div class="p-3 bg-indigo-950/50 rounded-xl border border-indigo-800/40">
+                    <i data-lucide="user-cog" class="w-8 h-8"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-gray-100">加入前的同屏稱呼</h3>
+                    <p class="text-xs text-indigo-300">設定您的聊天暱稱，方便大家辨識您</p>
+                </div>
+            </div>
+            
+            <div class="space-y-4 pt-1">
+                <div class="space-y-2">
+                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider">自訂互動暱稱</label>
+                    <div class="flex gap-2">
+                        <input id="input-nickname" type="text" placeholder="請輸入您的暱稱..." class="flex-1 bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 text-indigo-300 font-bold">
+                        <button onclick="rollRandomNickname()" class="p-2.5 bg-gray-850 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl hover:text-white transition-all flex items-center justify-center" title="隨機產生一個">
+                            <i data-lucide="dices" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex space-x-3 pt-3">
+                <button onclick="confirmNicknameAndJoin()" class="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 text-sm">
+                    <i data-lucide="check-circle" class="w-4 h-4"></i>
+                    <span>確認暱稱並加入</span>
+                </button>
+                <button onclick="hideNicknameModal()" class="px-4 py-3 bg-gray-850 hover:bg-gray-800 border border-gray-800 text-gray-400 rounded-xl text-sm font-semibold transition-all">
+                    取消
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- 自訂通知元件 (替代原生 alert) -->
     <div id="notification-toast" class="fixed top-24 right-6 z-50 transform translate-x-full transition-transform duration-300 ease-out flex items-center p-4 space-x-3 bg-gray-900 border-l-4 border-indigo-500 rounded-lg shadow-xl max-w-sm">
         <div id="toast-icon" class="text-indigo-400">
@@ -174,16 +211,6 @@
                         您是分享者嗎？請在右側控制面板設定畫質並點擊「開始分享畫面」。<br>
                         如果您是觀眾，請輸入朋友給您的 6 位數房間代碼加入。
                     </p>
-                    <div class="flex flex-wrap justify-center gap-3">
-                        <button onclick="switchRole('host')" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-medium shadow-lg shadow-indigo-900/30 transition-all flex items-center space-x-2">
-                            <i data-lucide="video" class="w-4 h-4"></i>
-                            <span>切換為：我要分享</span>
-                        </button>
-                        <button onclick="switchRole('viewer')" class="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm font-medium border border-gray-700 transition-all flex items-center space-x-2">
-                            <i data-lucide="users" class="w-4 h-4"></i>
-                            <span>切換為：我要觀看</span>
-                        </button>
-                    </div>
                 </div>
 
                 <!-- 實際視訊播放器 -->
@@ -299,7 +326,7 @@
                             </select>
                         </div>
 
-                        <!-- [全新增] 體育與高動態影音解鎖引擎設定 -->
+                        <!-- 體育與高動態影音解鎖引擎設定 -->
                         <div class="bg-indigo-950/20 border border-indigo-800/40 p-3.5 rounded-xl space-y-3">
                             <div class="flex items-center space-x-2 text-indigo-400">
                                 <i data-lucide="tv-2" class="w-4 h-4"></i>
@@ -370,7 +397,7 @@
                     </div>
 
                     <div class="pt-2">
-                        <button id="btn-join-room" onclick="joinRoom()" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2">
+                        <button id="btn-join-room" onclick="promptNicknameBeforeJoin()" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2">
                             <i data-lucide="log-in" class="w-5 h-5"></i>
                             <span>加入共享看播</span>
                         </button>
@@ -447,6 +474,9 @@
         let viewerId = 'viewer_' + Math.floor(10000 + Math.random() * 90000); 
         const appStartTime = Date.now(); 
 
+        // 觀看人數管理 (使用 Set 來進行精準去重追蹤)
+        let activeViewersList = new Set();
+
         // 效能監控變數
         let lastDecodedFrames = 0;
         let lastFrameTime = performance.now();
@@ -463,7 +493,17 @@
             ]
         };
 
-        const myNickname = '用戶_' + Math.floor(1000 + Math.random() * 9000);
+        // 預設隨機酷炫動物名字生成庫
+        const funnyAdjectives = ["熱情的", "神祕的", "勇敢的", "愛笑的", "優雅的", "傲嬌的", "呆萌的", "飛奔的", "歌唱的", "沉思的", "霸氣的"];
+        const coolAnimals = ["陸龜", "貓頭鷹", "獵豹", "袋鼠", "白鷺", "柴犬", "水豚", "企鵝", "海獺", "熊貓", "海豚", "黑熊"];
+        
+        function generateRandomNickname() {
+            const adj = funnyAdjectives[Math.floor(Math.random() * funnyAdjectives.length)];
+            const ani = coolAnimals[Math.floor(Math.random() * coolAnimals.length)];
+            return adj + ani;
+        }
+
+        let myNickname = '用戶_' + Math.floor(1000 + Math.random() * 9000);
 
         // Firebase 連線對象
         let db = null;
@@ -473,7 +513,7 @@
         let signalsCollection = null;
         let signalsUnsubscribe = null;
 
-        // 【全新硬編碼硬防禦】您的專屬 Firebase 密鑰
+        // 【安全硬防禦】您的專屬 Firebase 密鑰
         const defaultFirebaseConfig = {
             apiKey: "AIzaSyDMaRnD0yhjUZpMRXdqC_I-vWE2aQ_xs9U",
             authDomain: "sharescreen-2fc87.firebaseapp.com",
@@ -499,6 +539,42 @@
             logBox.scrollTop = logBox.scrollHeight;
         }
 
+        // 彈出並滾動隨機暱稱
+        function rollRandomNickname() {
+            const input = document.getElementById('input-nickname');
+            input.value = generateRandomNickname();
+            lucide.createIcons();
+        }
+
+        // 在加入之前彈出暱稱詢問 Modal
+        function promptNicknameBeforeJoin() {
+            const hostId = document.getElementById('input-host-id').value.trim();
+            if (hostId.length !== 6) {
+                showToast("請輸入正確的 6 位數房間代碼！", "error");
+                return;
+            }
+            rollRandomNickname();
+            document.getElementById('nickname-modal').classList.remove('hidden');
+        }
+
+        function hideNicknameModal() {
+            document.getElementById('nickname-modal').classList.add('hidden');
+        }
+
+        // 確定暱稱並開始連線
+        function confirmNicknameAndJoin() {
+            const input = document.getElementById('input-nickname');
+            const customName = input.value.trim();
+            if (!customName) {
+                showToast("暱稱不能為空喔！", "error");
+                return;
+            }
+            myNickname = customName;
+            document.getElementById('chat-user-tag').innerText = myNickname;
+            hideNicknameModal();
+            joinRoom();
+        }
+
         // 網頁載入初始化
         window.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
@@ -513,8 +589,13 @@
                 logToSystem("【重要】瀏覽器安全政策禁止在非安全網站分享螢幕，請務必架設本機伺服器，或部署至 GitHub (HTTPS)！", "error");
                 document.getElementById('banner-text').innerText = "安全警告：本機開啟(file://)不支援螢幕分享！請部署至 GitHub Pages 測試。";
                 document.getElementById('iframe-global-banner').classList.remove('hidden');
+            } else if (!isSecure && !isLocalFile && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                logToSystem("偵測到您使用的是非加密 HTTP 連線！", "warning");
+                logToSystem("【安全警告】WebRTC 與螢幕分享功能在非安全連線 (HTTP) 下會被瀏覽器強制鎖定，請務必使用 HTTPS 連線！", "error");
+                document.getElementById('banner-text').innerText = "安全警告：非 HTTPS 加密連線不支援螢幕分享！請使用 HTTPS 測試。";
+                document.getElementById('iframe-global-banner').classList.remove('hidden');
             } else if (window.self !== window.top) {
-                logToSystem("偵測到網頁執行於 Gemini 編輯器沙盒(Iframe)中。", "info");
+                logToSystem("偵測到網頁執行於 編輯器沙盒(Iframe)中。", "info");
                 document.getElementById('iframe-global-banner').classList.remove('hidden');
             } else {
                 logToSystem(`運作環境良好。網址協定: ${window.location.protocol}`, "success");
@@ -533,68 +614,66 @@
             }
         });
 
-        // 安全地開啟新分頁：在 Canvas 中使用 Blob URL 作為安全 Fallback
-        function openInNewTab() {
-            try {
-                if (window.location.protocol !== 'about:' && !window.location.href.startsWith('blob:') && window.location.protocol !== 'file:') {
-                    window.open(window.location.href, '_blank');
-                    return;
-                }
-                const htmlContent = document.documentElement.outerHTML;
-                const blob = new Blob([htmlContent], { type: 'text/html' });
-                const blobUrl = URL.createObjectURL(blob);
-                window.open(blobUrl, '_blank');
-                logToSystem("已產生安全的動態分頁，已繞過編輯器 iframe 限制！", "success");
-            } catch (e) {
-                showToast("無法在新分頁中直接執行。請點選 Canvas 編輯器右上角的「Open in new tab」按鈕，或下載至本機執行！", "error");
-            }
-        }
+        // 異步逾時控制保護（防禦卡死）
+        const timeoutPromise = (promise, ms, errorMsg) => {
+            return new Promise((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error(errorMsg)), ms);
+                promise.then(
+                    (res) => { clearTimeout(timer); resolve(res); },
+                    (err) => { clearTimeout(timer); reject(err); }
+                );
+            });
+        };
 
-        function showFirebaseConfigModal() {
-            document.getElementById('firebase-config-modal').classList.remove('hidden');
-        }
-
-        function hideFirebaseConfigModal() {
-            document.getElementById('firebase-config-modal').classList.add('hidden');
-        }
-
-        function showSafetyModal() {
-            document.getElementById('safety-modal').classList.remove('hidden');
-        }
-
-        function hideSafetyModal() {
-            document.getElementById('safety-modal').classList.add('hidden');
-        }
-
-        // 2. 初始化 Firebase (整合硬編碼、環境注入變數、LocalStorage)
+        // 初始化 Firebase (支援環境注入變數與本機/GitHub 密鑰精靈，新增阻擋與超時排除功能)
         async function initFirebase() {
             try {
+                // 防禦偵測：檢查 Firebase 核心庫是否因為 AdBlocker 而完全未載入
+                if (typeof firebase === 'undefined') {
+                    throw new Error("Firebase SDK 載入失敗！您的瀏覽器或廣告攔截器 (AdBlocker/Brave Shields) 阻擋了與 gstatic.com 的連線。請暫時停用攔截器後重新整理。");
+                }
+
                 let firebaseConfig = null;
                 let isCustomConfig = false;
 
-                // A. 優先嘗試獲取 Gemini 沙盒動態注入的環境變數 (僅在 Canvas Preview 中有效)
+                // A. 優先嘗試獲取沙盒動態注入的環境變數 (僅在 Canvas Preview 中有效)
                 if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                    firebaseConfig = JSON.parse(__firebase_config);
-                    logToSystem("已載入 Gemini 系統預設環境密鑰進行測試。", "success");
+                    if (typeof __firebase_config === 'object') {
+                        firebaseConfig = __firebase_config;
+                        logToSystem("已載入預設環境密鑰 (Object 格式)。", "success");
+                    } else {
+                        try {
+                            firebaseConfig = JSON.parse(__firebase_config);
+                            logToSystem("已載入預設環境密鑰 (JSON String 格式)。", "success");
+                        } catch (jsonErr) {
+                            logToSystem(`解析預設環境密鑰失敗: ${jsonErr.message}`, "error");
+                        }
+                    }
                 } 
                 // B. 其次尋找本機 LocalStorage 中有無手動設定的自訂密鑰
                 else {
                     const localSavedConfig = localStorage.getItem('custom_firebase_config');
                     if (localSavedConfig) {
-                        firebaseConfig = JSON.parse(localSavedConfig);
-                        isCustomConfig = true;
-                        logToSystem("成功載入本機 LocalStorage 保存的 Firebase 自訂設定。", "success");
-                    } else {
-                        // C. 若無自訂設定，直接套用您提供的專屬內建密鑰，免去所有設定步驟！
-                        firebaseConfig = defaultFirebaseConfig;
-                        logToSystem("已成功載入內建專屬 Firebase 配置！免設定直接啟用。", "success");
+                        try {
+                            firebaseConfig = JSON.parse(localSavedConfig);
+                            isCustomConfig = true;
+                            logToSystem("成功載入本機 LocalStorage 保存的 Firebase 自訂設定。", "success");
+                        } catch (parseErr) {
+                            logToSystem("LocalStorage 密鑰格式損毀，還原預設值。", "warning");
+                        }
                     }
+                }
+
+                // C. 若皆無，直接套用您提供的專屬內建密鑰，免去所有設定步驟！
+                if (!firebaseConfig) {
+                    firebaseConfig = defaultFirebaseConfig;
+                    logToSystem("已成功載入您提供的內建專屬 Firebase 配置！免設定直接啟用。", "success");
                 }
 
                 // 顯示設定重設按鈕
                 document.getElementById('btn-reset-config').classList.remove('hidden');
 
-                logToSystem(`正在連結 Firebase 專案 [${firebaseConfig.projectId}]...`, "info");
+                logToSystem(`正在連結 Firebase 專案 [${firebaseConfig.projectId || '未知'}]...`, "info");
                 
                 // 初始化 Firebase 實體
                 firebase.initializeApp(firebaseConfig);
@@ -608,16 +687,24 @@
                 logToSystem("正在向伺服器申請臨時安全憑證 (匿名登入)...", "info");
                 
                 try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        userCredential = await auth.signInWithCustomToken(__initial_auth_token);
-                    } else {
-                        userCredential = await auth.signInAnonymously();
-                    }
+                    const loginPromise = (typeof __initial_auth_token !== 'undefined' && __initial_auth_token)
+                        ? auth.signInWithCustomToken(__initial_auth_token)
+                        : auth.signInAnonymously();
+
+                    // 10 秒強制定時超時保護，拒絕無限期卡死在 "安全初始化中..."
+                    userCredential = await timeoutPromise(
+                        loginPromise,
+                        10000,
+                        "伺服器認證回應逾時（10秒）！這通常是因為您的網頁廣告攔截器阻擋了安全要求、或 Firebase 認證網域 (authDomain) 被封鎖。"
+                    );
                 } catch (authError) {
                     logToSystem(`認證失敗！錯誤原因：${authError.message}`, "error");
-                    logToSystem("請確認您的 Firebase 控制台 -> Authentication -> Sign-in Method，已啟用【匿名登入 (Anonymous)】！", "error");
-                    updateStatus('error', '匿名登入未啟用');
-                    showToast("Firebase 認證失敗，請檢查下方日誌診斷！", "error");
+                    logToSystem("👉 建議排除方案：", "warning");
+                    logToSystem("1. 請確認您的 Firebase 控制台 -> Build -> Authentication -> Sign-in Method 中，【匿名登入 (Anonymous)】是否已點擊「啟用」！", "warning");
+                    logToSystem("2. 請暫時關閉網頁廣告攔截器 (AdBlock, uBlock, Brave 護盾) 後重新整理測試。", "warning");
+                    
+                    updateStatus('error', '安全憑證認證失敗');
+                    showToast("認證登入逾時，請查看下方日誌面板診斷。", "error");
                     return;
                 }
 
@@ -629,84 +716,28 @@
                     throw new Error("未能成功取得認證使用者");
                 }
 
-                const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
+                const projId = firebaseConfig.projectId || 'my-stream-app';
+                const appId = typeof __app_id !== 'undefined' && __app_id ? __app_id : projId;
                 
                 // 依照 Rule 1 的指定路徑格式
                 roomsCollection = db.collection('artifacts/' + appId + '/public/data/rooms');
                 signalsCollection = db.collection('artifacts/' + appId + '/public/data/signals');
                 
-                logToSystem("已成功對接 Cloud Firestore 信令資料庫。", "success");
+                logToSystem("已成功對接 Cloud Firestore 信令資料庫，安全通道完美暢通！", "success");
 
             } catch (e) {
                 console.error("Firebase 初始化失敗:", e);
-                updateStatus('error', '資料庫連線失敗');
-                logToSystem(`資料庫對接失敗！錯誤詳情: ${e.message}`, "error");
-                logToSystem("提示：請確認您已在控制台建立【Firestore Database】(測試模式)！", "error");
-                showToast("Firebase 連線錯誤，請確認設定內容正確無誤。", "error");
+                updateStatus('error', '安全連線對接失敗');
+                logToSystem(`初始化失敗：${e.message}`, "error");
+                showToast("Firebase 連線錯誤，請確認設定內容及連線狀況。", "error");
             }
         }
 
-        // 保存手動貼入的自訂 Firebase 密鑰 (供進階切換使用)
-        function saveCustomFirebaseConfig() {
-            const textarea = document.getElementById('input-firebase-config');
-            const rawValue = textarea.value.trim();
-            if (!rawValue) {
-                showToast("請輸入有效的 Firebase Config JSON 內容！", "error");
-                return;
-            }
-
-            try {
-                let parsedConfig = {};
-                if (rawValue.includes('apiKey')) {
-                    let jsonStr = rawValue;
-                    if (!rawValue.startsWith('{')) {
-                        const start = rawValue.indexOf('{');
-                        const end = rawValue.lastIndexOf('}');
-                        if (start !== -1 && end !== -1) {
-                            jsonStr = rawValue.substring(start, end + 1);
-                        }
-                    }
-                    jsonStr = jsonStr
-                        .replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":') 
-                        .replace(/'/g, '"'); 
-                    
-                    parsedConfig = JSON.parse(jsonStr);
-                } else {
-                    parsedConfig = JSON.parse(rawValue);
-                }
-
-                if (!parsedConfig.apiKey || !parsedConfig.projectId) {
-                    throw new Error("遺失必要屬性 (apiKey / projectId)");
-                }
-
-                localStorage.setItem('custom_firebase_config', JSON.stringify(parsedConfig));
-                showToast("設定成功！正在重試初始化...", "success");
-                
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
-
-            } catch (e) {
-                showToast("JSON 格式解析錯誤，請確認內容符合正確的 JSON 格式！", "error");
-                console.error(e);
-            }
-        }
-
-        // 清除自訂 Firebase 設定，還原回預設內建
-        function clearCustomFirebaseConfig() {
-            localStorage.removeItem('custom_firebase_config');
-            showToast("已還原為預設內建專屬 Firebase 設定！", "info");
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-        }
-
-        // 獨家頻寬優化技術：將帶寬設定注入 SDP (Session Description Protocol)
+        // SDP 頻寬優化注入函數
         function setSdpMediaBitrate(sdp, media, bitrateKbps) {
             const lines = sdp.split("\r\n");
             let mediaIndex = -1;
             
-            // 尋找視訊軌道 m=video 起始點
             for (let i = 0; i < lines.length; i++) {
                 if (lines[i].indexOf("m=" + media) === 0) {
                     mediaIndex = i;
@@ -715,7 +746,6 @@
             }
             if (mediaIndex === -1) return sdp;
 
-            // 強力插入或取代 b=AS 屬性，通知瀏覽器釋放頻寬
             logToSystem(`[SDP優化] 已將視訊上傳頻寬限制修改並解鎖至 ${bitrateKbps} Kbps`, "success");
             lines.splice(mediaIndex + 1, 0, `b=AS:${bitrateKbps}`);
             lines.splice(mediaIndex + 2, 0, `b=TIAS:${bitrateKbps * 1000}`);
@@ -723,7 +753,7 @@
             return lines.join("\r\n");
         }
 
-        // [全新增] 動態更新 WebRTC 的硬體編碼器傳輸限制 (RtpSender.setParameters)
+        // RtpSender 碼率與幀率鎖定
         async function applyDynamicEncodingOptimizations(pc) {
             if (!pc) return;
             const targetKbps = parseInt(document.getElementById('config-max-bitrate').value);
@@ -738,43 +768,20 @@
                             parameters.encodings = [{}];
                         }
                         
-                        // 設定極致頻寬 (Bps) 與最大 FPS
                         parameters.encodings[0].maxBitrate = targetKbps * 1000;
                         parameters.encodings[0].maxFramerate = targetFps;
-                        parameters.encodings[0].priority = "high"; // 提高頻寬調度優先權
+                        parameters.encodings[0].priority = "high";
                         
                         await sender.setParameters(parameters);
                         logToSystem(`[編碼優化] 顯卡編碼器已套用：最大碼率 ${targetKbps / 1000} Mbps, FPS 限制為 ${targetFps} FPS`, "success");
                     } catch (e) {
-                        console.warn("顯卡編碼調諧失敗 (可能不支援 on-the-fly 控制):", e);
+                        console.warn("顯卡編碼調諧失敗:", e);
                     }
                 }
             }
         }
 
-        // 3. 角色與切換面板
-        function switchRole(role) {
-            currentRole = role;
-            const tabHost = document.getElementById('tab-host');
-            const tabViewer = document.getElementById('tab-viewer');
-            const panelHost = document.getElementById('panel-host');
-            const panelViewer = document.getElementById('panel-viewer');
-
-            if (role === 'host') {
-                tabHost.className = "flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all bg-indigo-600 text-white shadow-md";
-                tabViewer.className = "flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all text-gray-400 hover:text-gray-200";
-                panelHost.classList.remove('hidden');
-                panelViewer.classList.add('hidden');
-                updateShareUrl();
-            } else {
-                tabHost.className = "flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all text-gray-400 hover:text-gray-200";
-                tabViewer.className = "flex-1 py-2 text-sm font-medium rounded-lg text-center transition-all bg-emerald-600 text-white shadow-md";
-                panelHost.classList.add('hidden');
-                panelViewer.classList.remove('hidden');
-            }
-        }
-
-        // 4. HOST (分享端) 邏輯：擷取螢幕並註冊房號
+        // HOST (分享端) 邏輯：擷取螢幕並註冊房號
         async function startScreenShare() {
             if (!currentUser || !roomsCollection) {
                 showToast("安全登入尚未就緒，請稍候或設定 Firebase...", "info");
@@ -786,7 +793,6 @@
             const targetFps = document.getElementById('config-fps').value;
             const contentHintMode = document.getElementById('config-content-hint').value;
 
-            // 超高規格 WebRTC 螢幕共享擷取設定
             const captureConstraints = {
                 video: {
                     width: { ideal: targetRes === '2160' ? 3840 : targetRes === '1440' ? 2560 : targetRes === '1080' ? 1920 : 1280 },
@@ -804,22 +810,19 @@
                 logToSystem("正在發起系統螢幕與音效擷取請求...", "info");
                 updateStatus('connecting', '正在擷取系統螢幕與音效...');
                 
-                // 呼叫瀏覽器 API 擷取螢幕
                 activeStream = await navigator.mediaDevices.getDisplayMedia(captureConstraints);
                 logToSystem("螢幕與音訊擷取成功！", "success");
 
-                // [體育賽事獨家電競級優化]：套用 ContentHint
+                // ContentHint 高流暢體育賽事設定
                 const videoTrack = activeStream.getVideoTracks()[0];
                 if (videoTrack) {
                     videoTrack.contentHint = contentHintMode;
                     logToSystem(`[高流暢優化] 視訊軌道 ContentHint 已切換為：【${contentHintMode === 'motion' ? '⚽體育動態優先' : '📄靜態細節優先'}】`, "success");
                 }
                 
-                // 產生一個好記的 6 位數房號
                 myRoomId = Math.floor(100000 + Math.random() * 900000).toString();
                 
                 logToSystem(`正在註冊 6 位數房間編號 [${myRoomId}] 至 Cloud Firestore...`, "info");
-                // 在 Firestore 中註冊此房號
                 await roomsCollection.doc(myRoomId).set({
                     hostId: currentUser.uid,
                     active: true,
@@ -830,21 +833,17 @@
                 showToast("螢幕共享已啟動！房間號碼為: " + myRoomId, "success");
                 updateStatus('live', '正在同步直播：' + myRoomId);
 
-                // 監聽結束共享事件
                 activeStream.getVideoTracks()[0].onended = () => {
                     stopScreenShare();
                 };
 
-                // 本地預覽播放器設定
                 setupVideoPlayer(activeStream);
 
-                // 更新介面
                 document.getElementById('btn-start-share').classList.add('hidden');
                 document.getElementById('btn-stop-share').classList.remove('hidden');
                 document.getElementById('room-link-container').classList.remove('hidden');
                 updateShareUrl();
 
-                // 啟動 Host 信令接收監聽
                 startHostSignalingListener();
 
             } catch (err) {
@@ -852,7 +851,6 @@
                 updateStatus('ready', '連線就緒，可以分享或加入');
                 logToSystem(`螢幕擷取失敗：${err.name} - ${err.message}`, "error");
                 
-                // 檢查是否為 Iframe 限制所引起的安全拒絕
                 if (window.self !== window.top || err.name === 'NotAllowedError' || err.name === 'SecurityError') {
                     showSafetyModal();
                 } else {
@@ -893,6 +891,26 @@
                                     });
                                 }
 
+                                // 關鍵優化：利用 WebRTC 實時 Tunnel 狀態變更事件，精準偵測觀看人數
+                                pc.onconnectionstatechange = () => {
+                                    logToSystem(`[WebRTC] 與觀眾 [${fromViewer}] 的實時通道狀態變更為: ${pc.connectionState}`, "info");
+                                    
+                                    if (pc.connectionState === 'connected') {
+                                        if (!activeViewersList.has(fromViewer)) {
+                                            activeViewersList.add(fromViewer);
+                                            updateViewerCount();
+                                            broadcastViewerCount();
+                                        }
+                                    } else if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+                                        if (activeViewersList.has(fromViewer)) {
+                                            activeViewersList.delete(fromViewer);
+                                            updateViewerCount();
+                                            broadcastViewerCount();
+                                        }
+                                        delete peerConnections[fromViewer];
+                                    }
+                                };
+
                                 pc.ondatachannel = (event) => {
                                     const dc = event.channel;
                                     setupDataChannel(dc, fromViewer);
@@ -916,14 +934,10 @@
 
                                 const answer = await pc.createAnswer();
                                 
-                                // 【優化碼率】寫入 SDP 頻寬限制
                                 const maxKbps = parseInt(document.getElementById('config-max-bitrate').value);
                                 answer.sdp = setSdpMediaBitrate(answer.sdp, "video", maxKbps);
 
                                 await pc.setLocalDescription(answer);
-
-                                // 連線完後套用動態 RtpSender 優化
-                                await applyDynamicEncodingOptimizations(pc);
 
                                 if (currentUser) {
                                     await signalsCollection.add({
@@ -958,6 +972,15 @@
             });
         }
 
+        // Host 廣播人數同步
+        function broadcastViewerCount(excludePeerId = null) {
+            const msgObj = {
+                type: 'viewer_count',
+                count: activeViewersList.size
+            };
+            broadcastMessage(msgObj, excludePeerId);
+        }
+
         // Host 結束分享
         async function stopScreenShare() {
             logToSystem("終止畫面共享，正在清理連線頻道...", "info");
@@ -979,11 +1002,14 @@
                 signalsUnsubscribe = null;
             }
 
+            activeViewersList.clear();
+            updateViewerCount();
+
             resetToWaitingState();
             showToast("已停止畫面共享。", "info");
         }
 
-        // 5. VIEWER (觀看端) 邏輯：加入房間
+        // VIEWER (觀看端) 邏輯：加入房間
         async function joinRoom() {
             if (!currentUser || !roomsCollection) {
                 showToast("安全登入尚未就緒，請稍候或設定 Firebase...", "info");
@@ -1110,7 +1136,7 @@
             });
         }
 
-        // 6. 即時聊天室互動
+        // 6. 即時聊天室互動與自訂暱稱廣播
         function setupDataChannel(dc, peerId = null) {
             if (currentRole === 'host') {
                 activeDataChannels[peerId] = dc;
@@ -1125,7 +1151,6 @@
 
                 dc.onclose = () => {
                     delete activeDataChannels[peerId];
-                    updateViewerCount(-1);
                 };
 
                 enableChat();
@@ -1135,13 +1160,19 @@
                 dc.onopen = () => {
                     logToSystem("P2P 極速文字互動通道已成功開通！", "success");
                     enableChat();
-                    appendChatMessage("系統提示", "已建立極速低延遲通道，快打聲招呼吧！");
+                    appendChatMessage("系統提示", `已使用暱稱【${myNickname}】建立極速低延遲通道，快打聲招呼吧！`);
                 };
 
                 dc.onmessage = (event) => {
                     const data = JSON.parse(event.data);
                     if (data.type === 'chat') {
                         appendChatMessage(data.sender, data.text);
+                    } else if (data.type === 'viewer_count_update') {
+                        // 觀眾端接收來自 Host 廣播的最精準在線人數
+                        const countEl = document.getElementById('stat-viewers');
+                        if (countEl) {
+                            countEl.innerText = data.count + ' 人';
+                        }
                     }
                 };
 
@@ -1151,8 +1182,8 @@
             }
         }
 
-        function sendChatMessage(e) {
-            if (e) e.preventDefault();
+        function sendChatMessage(event) {
+            if (event) event.preventDefault();
             const input = document.getElementById('chat-input');
             const text = input.value.trim();
             if (!text) return;
@@ -1284,7 +1315,6 @@
             lucide.createIcons();
         }
 
-        // 變更靜音
         function toggleMuteState() {
             const video = document.getElementById('shared-video');
             const icon = document.getElementById('btn-toggle-mute').querySelector('i');
@@ -1399,11 +1429,12 @@
             }
         }
 
-        function updateViewerCount(diff) {
+        // 更新人數顯示元件 (精準讀取 Set 大小)
+        function updateViewerCount() {
             const countEl = document.getElementById('stat-viewers');
-            let current = parseInt(countEl.innerText);
-            if (isNaN(current)) current = 0;
-            countEl.innerText = Math.max(0, current + diff) + ' 人';
+            if (countEl) {
+                countEl.innerText = activeViewersList.size + ' 人';
+            }
         }
 
         // 10. 自訂 Toast 通知
