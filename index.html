@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>60FPS 極速實時影音共享平台</title>
     <!-- 高質感 SVG 閃電 Favicon 呼應 StreamRTC Ultra 品牌主旨 -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    <link class="favicon" rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
     <!-- Tailwind CSS 適用於現代化精美 UI 設計 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide 圖標庫 -->
@@ -40,16 +40,6 @@
     </style>
 </head>
 <body class="text-gray-100 min-h-screen flex flex-col">
-
-    <!-- Iframe / file:// 頂部強烈警告橫幅 (專治安全上下文限制) -->
-    <div id="iframe-global-banner" class="hidden bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 px-4 py-2.5 text-center text-sm font-semibold text-white flex flex-wrap items-center justify-center gap-2 shadow-lg z-50">
-        <i data-lucide="alert-octagon" class="w-5 h-5 animate-pulse"></i>
-        <span id="banner-text">瀏覽器安全限制：螢幕分享功能【必須在獨立分頁且為 HTTPS 或 localhost】下執行！</span>
-        <button onclick="openInNewTab()" class="px-3 py-1 bg-white text-orange-700 hover:bg-gray-100 transition-all rounded-lg text-xs font-bold shadow-md flex items-center gap-1">
-            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-            在新分頁開啟 / 解鎖限制
-        </button>
-    </div>
 
     <!-- 頂部導覽列 -->
     <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
@@ -114,7 +104,7 @@
         </div>
     </div>
 
-    <!-- 自訂通知元件 (替代原生 alert) -->
+    <!-- 自訂通知元件 -->
     <div id="notification-toast" class="fixed top-24 right-6 z-50 transform translate-x-full transition-transform duration-300 ease-out flex items-center p-4 space-x-3 bg-gray-900 border-l-4 border-indigo-500 rounded-lg shadow-xl max-w-sm">
         <div id="toast-icon" class="text-indigo-400">
             <i data-lucide="info" class="w-6 h-6"></i>
@@ -214,7 +204,7 @@
         </div> <!-- [精確閉合] 確保左側 lg:col-span-3 的佈局絕對不提早結束 -->
 
         <!-- 右側：控制中心與互動面板 (佔 1/4 寬度) -->
-        <div class="flex flex-col space-y-6 h-full">
+        <div class="flex flex-col space-y-6 h-full text-sm">
             <!-- 模式切換器 (分享 / 觀看) -->
             <div class="flex p-1 bg-gray-950 border border-gray-800 rounded-xl">
                 <button id="tab-host" onclick="switchRole('host')" class="flex-1 py-2 text-xs font-semibold rounded-lg transition-all bg-indigo-600 text-white shadow-md">
@@ -230,7 +220,17 @@
                 
                 <!-- HOST (分享者) 控制面版 -->
                 <div id="panel-host" class="space-y-5">
-                    <div class="border-b border-gray-800 pb-3">
+                    <!-- 連線子分流切換器 -->
+                    <div class="flex p-1 bg-gray-950/80 border border-gray-800/80 rounded-lg text-xs">
+                        <button id="btn-subhost-auto" onclick="setHostConnMode('auto')" class="flex-1 py-1.5 font-bold rounded bg-indigo-600/80 text-white transition-all">
+                            ⚡ 自動房號
+                        </button>
+                        <button id="btn-subhost-manual" onclick="setHostConnMode('manual')" class="flex-1 py-1.5 font-bold text-gray-400 hover:text-gray-200 transition-all">
+                            🌐 手動免網
+                        </button>
+                    </div>
+
+                    <div class="border-b border-gray-800 pb-2">
                         <h3 class="font-bold text-base flex items-center space-x-2">
                             <i data-lucide="sliders" class="w-5 h-5 text-indigo-400"></i>
                             <span>超高畫質/高影格設定</span>
@@ -272,7 +272,6 @@
                                     <option value="motion">體育賽事、電影、高流暢運動優先 (Motion)</option>
                                     <option value="detail">簡報、網頁、程式碼靜態細節優先 (Detail)</option>
                                 </select>
-                                <p class="text-[10px] text-gray-500 mt-1">「運動優先」可解決鏡頭快速旋轉與平移時的馬賽克。</p>
                             </div>
 
                             <div>
@@ -287,19 +286,49 @@
                         </div>
                     </div>
 
-                    <!-- 按鈕動作區 -->
-                    <div class="space-y-3 pt-2">
+                    <!-- 標準自動模式 UI -->
+                    <div id="host-auto-section" class="space-y-3">
                         <button id="btn-start-share" onclick="startScreenShare()" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2">
                             <i data-lucide="screen-share" class="w-5 h-5"></i>
-                            <span>啟動 60fps 畫面分享</span>
-                        </button>
-                        <button id="btn-stop-share" onclick="stopScreenShare()" class="w-full py-3 bg-red-950/60 border border-red-800 text-red-300 font-semibold rounded-xl hover:bg-red-900/40 transition-all flex items-center justify-center space-x-2 hidden">
-                            <i data-lucide="screen-share-off" class="w-5 h-5"></i>
-                            <span>結束分享</span>
+                            <span>啟動自動房號分享</span>
                         </button>
                     </div>
 
-                    <!-- 邀請與連線區域 -->
+                    <!-- 【全新】手動無牆模式 UI -->
+                    <div id="host-manual-section" class="space-y-3 hidden bg-gray-950/80 border border-gray-800 p-4 rounded-xl">
+                        <p class="text-[11px] text-amber-400">1. 先點擊下方按鈕，選擇並開啟螢幕畫面：</p>
+                        <button id="btn-manual-capture" onclick="startScreenShareManual()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5">
+                            <i data-lucide="video" class="w-4 h-4"></i>
+                            開啟螢幕擷取
+                        </button>
+                        
+                        <div id="manual-step-sdp" class="space-y-2 hidden pt-2 border-t border-gray-850">
+                            <p class="text-[11px] text-indigo-300">2. 生成手動邀請碼，發送給您在中國的朋友：</p>
+                            <button onclick="generateManualOffer()" class="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5">
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                                產生手動邀請碼 (Offer)
+                            </button>
+                            <textarea id="manual-offer-output" readonly placeholder="手動邀請碼生成區..." class="w-full h-20 bg-black border border-gray-850 rounded-lg p-2 text-[10px] text-emerald-400 mono-font focus:outline-none"></textarea>
+                            <button onclick="copyManualOffer()" class="w-full py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs rounded transition-all">
+                                複製邀請碼
+                            </button>
+                            
+                            <p class="text-[11px] text-indigo-300 pt-2 border-t border-gray-850">3. 貼入朋友回傳的「同意碼」建立連線：</p>
+                            <textarea id="manual-answer-input" placeholder="在此貼入對方傳給您的回傳碼 (Answer)..." class="w-full h-16 bg-black border border-gray-850 rounded-lg p-2 text-[10px] text-gray-300 focus:outline-none focus:border-indigo-500"></textarea>
+                            <button onclick="connectManualViewer()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5">
+                                <i data-lucide="check-check" class="w-4 h-4"></i>
+                                完成手動連線
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 結束分享按鈕 (通用) -->
+                    <button id="btn-stop-share" onclick="stopScreenShare()" class="w-full py-3 bg-red-950/60 border border-red-800 text-red-300 font-semibold rounded-xl hover:bg-red-900/40 transition-all flex items-center justify-center space-x-2 hidden">
+                        <i data-lucide="screen-share-off" class="w-5 h-5"></i>
+                        <span>結束分享</span>
+                    </button>
+
+                    <!-- 邀請與連線區域 (自動房號專屬) -->
                     <div id="room-link-container" class="space-y-3 pt-3 border-t border-gray-800 hidden">
                         <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider">邀請好友加入連結</label>
                         <div class="flex space-x-2">
@@ -308,31 +337,67 @@
                                 <i data-lucide="copy" class="w-4 h-4"></i>
                             </button>
                         </div>
-                        <p class="text-[11px] text-gray-500">傳送此專屬連結，好友點開即可**實時 60fps 觀看**您的精采畫面與系統聲音！</p>
+                        <p class="text-[11px] text-gray-500">傳送此專屬連結，好友點開即可**實時 60fps 觀看**！</p>
                     </div>
                 </div>
 
                 <!-- VIEWER (觀看者) 控制面版 -->
                 <div id="panel-viewer" class="space-y-5 hidden">
-                    <div class="border-b border-gray-800 pb-3">
-                        <h3 class="font-bold text-base flex items-center space-x-2">
-                            <i data-lucide="tv" class="w-5 h-5 text-indigo-400"></i>
-                            <span>加入好友的分享房</span>
-                        </h3>
-                        <p class="text-xs text-gray-400 mt-1">輸入 6 位數房號直接建立實時串流</p>
+                    <!-- 觀眾端子分流切換器 -->
+                    <div class="flex p-1 bg-gray-950/80 border border-gray-800/80 rounded-lg text-xs">
+                        <button id="btn-subviewer-auto" onclick="setViewerConnMode('auto')" class="flex-1 py-1.5 font-bold rounded bg-emerald-600/80 text-white transition-all">
+                            ⚡ 自動加入
+                        </button>
+                        <button id="btn-subviewer-manual" onclick="setViewerConnMode('manual')" class="flex-1 py-1.5 font-bold text-gray-400 hover:text-gray-200 transition-all">
+                            🌐 手動免網
+                        </button>
                     </div>
 
-                    <div class="space-y-4">
+                    <!-- 觀眾自動模式 -->
+                    <div id="viewer-auto-section" class="space-y-4">
+                        <div class="border-b border-gray-800 pb-3">
+                            <h3 class="font-bold text-base flex items-center space-x-2">
+                                <i data-lucide="tv" class="w-5 h-5 text-indigo-400"></i>
+                                <span>加入好友的分享房</span>
+                            </h3>
+                            <p class="text-xs text-gray-400 mt-1">輸入 6 位數房號直接建立實時串流</p>
+                        </div>
+
                         <div>
                             <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">房間編號 (Room ID)</label>
                             <input id="input-host-id" type="text" maxLength="6" placeholder="例如：123456" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-center text-lg font-bold tracking-widest mono-font focus:outline-none focus:border-indigo-500 text-indigo-300 placeholder-gray-600">
                         </div>
+
+                        <div class="pt-2">
+                            <button id="btn-join-room" onclick="promptNicknameBeforeJoin()" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2">
+                                <i data-lucide="log-in" class="w-5 h-5"></i>
+                                <span>加入共享看播</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <div class="pt-2">
-                        <button id="btn-join-room" onclick="promptNicknameBeforeJoin()" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2">
-                            <i data-lucide="log-in" class="w-5 h-5"></i>
-                            <span>加入共享看播</span>
+                    <!-- 【全新】觀眾手動模式 -->
+                    <div id="viewer-manual-section" class="space-y-3 hidden bg-gray-950/80 border border-gray-800 p-4 rounded-xl">
+                        <div class="border-b border-gray-800 pb-2">
+                            <h3 class="font-bold text-sm text-indigo-400 flex items-center gap-1.5">
+                                <i data-lucide="globe-2" class="w-4 h-4"></i>
+                                <span>手動無牆觀看</span>
+                            </h3>
+                            <p class="text-[10px] text-gray-400 mt-0.5">完全免伺服器，適合中國境內跨網段直連</p>
+                        </div>
+
+                        <p class="text-[11px] text-indigo-300">1. 請先貼入主播給您的「手動邀請碼」：</p>
+                        <textarea id="manual-offer-input" placeholder="貼入主播的邀請碼 (Offer)..." class="w-full h-16 bg-black border border-gray-850 rounded-lg p-2 text-[10px] text-gray-300 focus:outline-none focus:border-indigo-500"></textarea>
+                        
+                        <p class="text-[11px] text-indigo-300 pt-1">2. 產生並傳回給主播您的「同意碼」：</p>
+                        <button onclick="promptManualNicknameAndGenerate()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5">
+                            <i data-lucide="sparkles" class="w-4 h-4"></i>
+                            解析並產生回傳碼 (Answer)
+                        </button>
+                        
+                        <textarea id="manual-answer-output" readonly placeholder="生成的同意回傳碼..." class="w-full h-20 bg-black border border-gray-850 rounded-lg p-2 text-[10px] text-emerald-400 mono-font focus:outline-none"></textarea>
+                        <button onclick="copyManualAnswer()" class="w-full py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs rounded transition-all">
+                            複製回傳碼
                         </button>
                     </div>
                 </div>
@@ -414,6 +479,10 @@
         let lastDecodedFrames = 0;
         let lastFrameTime = performance.now();
         let fpsCheckInterval = null;
+
+        // 手動連線專用 RTCPeerConnection 與狀態鎖定
+        let manualPeerConnection = null;
+        let isManualMode = false;
 
         // WebRTC 連線配置與 STUN 伺服器
         const rtcConfig = {
@@ -551,10 +620,9 @@
                         "伺服器認證回應逾時（10秒）！這通常是因為您的網頁廣告攔截器阻擋了安全要求、或 Firebase 認證網域 (authDomain) 被封鎖。"
                     );
                 } catch (authError) {
-                    logToSystem(`認證失敗！錯誤原因：${authError.message}`, "error");
-                    logToSystem("👉 請確認您的 Firebase 控制台 -> Build -> Authentication -> Sign-in Method 中，【匿名登入 (Anonymous)】是否已「啟用」！", "warning");
+                    logToSystem(`認證失敗！${authError.message}`, "warning");
+                    logToSystem("👉 提示：若身處中國境內，可使用「手動免網」子分流建立純手動 P2P 觀賞，無需理會此錯誤！", "warning");
                     updateStatus('error', '安全憑證認證失敗');
-                    showToast("認證登入逾時，請查看下方日誌面板診斷。", "error");
                     return;
                 }
 
@@ -577,8 +645,7 @@
             } catch (e) {
                 console.error("Firebase 初始化失敗:", e);
                 updateStatus('error', '安全連線對接失敗');
-                logToSystem(`初始化失敗：${e.message}`, "error");
-                showToast("Firebase 連線錯誤，請確認設定內容及連線狀況。", "error");
+                logToSystem(`自動模式故障：${e.message}`, "warning");
             }
         }
 
@@ -629,7 +696,272 @@
             }
         }
 
-        // HOST (分享者) 邏輯：擷取螢幕並註冊房號
+        // 主播端連線子分流切換
+        function setHostConnMode(mode) {
+            const btnAuto = document.getElementById('btn-subhost-auto');
+            const btnManual = document.getElementById('btn-subhost-manual');
+            const autoSect = document.getElementById('host-auto-section');
+            const manualSect = document.getElementById('host-manual-section');
+
+            if (mode === 'auto') {
+                isManualMode = false;
+                btnAuto.className = "flex-1 py-1.5 font-bold rounded bg-indigo-600/80 text-white transition-all";
+                btnManual.className = "flex-1 py-1.5 font-bold text-gray-400 hover:text-gray-200 transition-all";
+                autoSect.classList.remove('hidden');
+                manualSect.classList.add('hidden');
+                logToSystem("切換至：⚡ 自動房號分享模式 (使用 Firebase)。", "info");
+            } else {
+                isManualMode = true;
+                btnAuto.className = "flex-1 py-1.5 font-bold text-gray-400 hover:text-gray-200 transition-all";
+                btnManual.className = "flex-1 py-1.5 font-bold rounded bg-indigo-600/80 text-white transition-all";
+                autoSect.classList.add('hidden');
+                manualSect.classList.remove('hidden');
+                logToSystem("切換至：🌐 手動免網模式 (完全不透過 Firebase 伺服器，適合中國境內連線)。", "info");
+            }
+        }
+
+        // 觀眾端連線子分流切換
+        function setViewerConnMode(mode) {
+            const btnAuto = document.getElementById('btn-subviewer-auto');
+            const btnManual = document.getElementById('btn-subviewer-manual');
+            const autoSect = document.getElementById('viewer-auto-section');
+            const manualSect = document.getElementById('viewer-manual-section');
+
+            if (mode === 'auto') {
+                isManualMode = false;
+                btnAuto.className = "flex-1 py-1.5 font-bold rounded bg-emerald-600/80 text-white transition-all";
+                btnManual.className = "flex-1 py-1.5 font-bold text-gray-400 hover:text-gray-200 transition-all";
+                autoSect.classList.remove('hidden');
+                manualSect.classList.add('hidden');
+            } else {
+                isManualMode = true;
+                btnAuto.className = "flex-1 py-1.5 font-bold text-gray-400 hover:text-gray-200 transition-all";
+                btnManual.className = "flex-1 py-1.5 font-bold rounded bg-emerald-600/80 text-white transition-all";
+                autoSect.classList.add('hidden');
+                manualSect.classList.remove('hidden');
+                logToSystem("切換至：手動免網觀看模式。", "info");
+            }
+        }
+
+        // ------------------ 【方案一：純手動 P2P 信令流程】 ------------------
+
+        // 手動模式 1: 主播開始螢幕擷取
+        async function startScreenShareManual() {
+            const targetRes = document.getElementById('config-resolution').value;
+            const targetFps = document.getElementById('config-fps').value;
+            const contentHintMode = document.getElementById('config-content-hint').value;
+
+            const captureConstraints = {
+                video: {
+                    width: { ideal: targetRes === '2160' ? 3840 : targetRes === '1440' ? 2560 : targetRes === '1080' ? 1920 : 1280 },
+                    height: { ideal: targetRes === '2160' ? 2160 : targetRes === '1440' ? 1440 : targetRes === '1080' ? 1080 : 720 },
+                    frameRate: { ideal: parseInt(targetFps), max: 120 }
+                },
+                audio: true
+            };
+
+            try {
+                updateStatus('connecting', '正在擷取系統螢幕與音效...');
+                activeStream = await navigator.mediaDevices.getDisplayMedia(captureConstraints);
+                logToSystem("手動模式：螢幕與音訊擷取成功！", "success");
+
+                const videoTrack = activeStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    videoTrack.contentHint = contentHintMode;
+                }
+
+                activeStream.getVideoTracks()[0].onended = () => {
+                    stopScreenShare();
+                };
+
+                setupVideoPlayer(activeStream);
+                document.getElementById('manual-step-sdp').classList.remove('hidden');
+                document.getElementById('btn-manual-capture').classList.add('hidden');
+                document.getElementById('btn-stop-share').classList.remove('hidden');
+
+            } catch (err) {
+                console.error("螢幕擷取錯誤:", err);
+                updateStatus('ready', '連線就緒');
+                logToSystem(`螢幕擷取失敗：${err.message}`, "error");
+                showToast("啟動擷取失敗：" + err.message, "error");
+            }
+        }
+
+        // 手動模式 2: 主播產生 Offer
+        async function generateManualOffer() {
+            if (!activeStream) {
+                showToast("請先開啟螢幕擷取！", "error");
+                return;
+            }
+
+            try {
+                logToSystem("正在建立手動 RTCPeerConnection...", "info");
+                manualPeerConnection = new RTCPeerConnection(rtcConfig);
+
+                // 注入本地媒體軌道
+                activeStream.getTracks().forEach(track => {
+                    manualPeerConnection.addTrack(track, activeStream);
+                });
+
+                // 建立手動聊天通道
+                const dc = manualPeerConnection.createDataChannel('chat');
+                setupDataChannel(dc, 'manual_viewer');
+
+                // 重要：監聽 ICE Gather 完成後，再一次性導出 SDP (禁用 Trickle ICE 以求不依賴伺服器)
+                manualPeerConnection.onicecandidate = (event) => {
+                    if (event.candidate === null) {
+                        const offer = manualPeerConnection.localDescription;
+                        // Base64 加密，避免傳輸格式跑掉
+                        const encodedOffer = btoa(unescape(encodeURIComponent(JSON.stringify(offer))));
+                        document.getElementById('manual-offer-output').value = encodedOffer;
+                        logToSystem("🎉 邀請碼生成成功！請點選「複製邀請碼」傳給您在中國的朋友。", "success");
+                        showToast("邀請碼產生成功！", "success");
+                    }
+                };
+
+                const offer = await manualPeerConnection.createOffer();
+                // 碼率優化
+                const maxKbps = parseInt(document.getElementById('config-max-bitrate').value);
+                offer.sdp = setSdpMediaBitrate(offer.sdp, "video", maxKbps);
+
+                await manualPeerConnection.setLocalDescription(offer);
+
+            } catch (err) {
+                logToSystem(`生成邀請碼失敗: ${err.message}`, "error");
+                showToast("生成失敗！", "error");
+            }
+        }
+
+        // 主播複製 Offer 邀請碼
+        function copyManualOffer() {
+            const textarea = document.getElementById('manual-offer-output');
+            textarea.select();
+            document.execCommand('copy');
+            showToast("手動邀請碼已複製到您的剪貼簿！", "success");
+        }
+
+        // 手動模式 3: 主播貼入觀眾同意碼並建立 P2P 直連
+        async function connectManualViewer() {
+            const rawAnswer = document.getElementById('manual-answer-input').value.trim();
+            if (!rawAnswer) {
+                showToast("請先貼入對方的回傳同意碼！", "error");
+                return;
+            }
+
+            try {
+                const decodedJson = decodeURIComponent(escape(atob(rawAnswer)));
+                const answerObj = JSON.parse(decodedJson);
+
+                logToSystem("正在對接觀眾端回傳同意碼...", "info");
+                await manualPeerConnection.setRemoteDescription(new RTCSessionDescription(answerObj));
+                logToSystem("🚀 手動 P2P 隧道連線成功！正在實時傳輸畫面與音效...", "success");
+                showToast("手動連線成功！", "success");
+                updateStatus('live', '手動極速直連中');
+
+                // 動態碼率調諧
+                await applyDynamicEncodingOptimizations(manualPeerConnection);
+
+                // 手動模式虛擬人數增加
+                activeViewersList.add('manual_viewer');
+                updateViewerCount();
+
+            } catch (err) {
+                logToSystem(`完成連線失敗：${err.message}`, "error");
+                showToast("連線建立失敗，請確認回傳碼複製完整！", "error");
+            }
+        }
+
+        // 手動模式 4: 觀眾端取名並解析 Offer
+        function promptManualNicknameAndGenerate() {
+            const rawOffer = document.getElementById('manual-offer-input').value.trim();
+            if (!rawOffer) {
+                showToast("請先貼入主播傳給您的邀請碼！", "error");
+                return;
+            }
+            // 彈出暱稱確認
+            rollRandomNickname();
+            
+            // 修改加入按鈕之確定動作，專屬於手動模式
+            const btnConfirm = document.querySelector("#nickname-modal button[onclick*='confirmNicknameAndJoin']");
+            btnConfirm.setAttribute("onclick", "confirmNicknameAndGenerateManual()");
+            
+            document.getElementById('nickname-modal').classList.remove('hidden');
+        }
+
+        // 觀眾端確認手動暱稱，並開始建立 Answer 回傳碼
+        async function confirmNicknameAndGenerateManual() {
+            const input = document.getElementById('input-nickname');
+            const customName = input ? input.value.trim() : '';
+            if (!customName) {
+                showToast("暱稱不能為空喔！", "error");
+                return;
+            }
+            myNickname = customName;
+            document.getElementById('chat-user-tag').innerText = myNickname;
+            hideNicknameModal();
+
+            const rawOffer = document.getElementById('manual-offer-input').value.trim();
+
+            try {
+                logToSystem("手動免網：正在解析主播邀請碼...", "info");
+                const decodedJson = decodeURIComponent(escape(atob(rawOffer)));
+                const offerObj = JSON.parse(decodedJson);
+
+                manualPeerConnection = new RTCPeerConnection(rtcConfig);
+
+                // 監聽主播畫面的軌道
+                const remoteStream = new MediaStream();
+                manualPeerConnection.ontrack = (event) => {
+                    logToSystem("手動模式：成功接收主播影音軌道！", "success");
+                    event.streams[0].getTracks().forEach(track => {
+                        remoteStream.addTrack(track);
+                    });
+                    setupVideoPlayer(remoteStream);
+                    updateStatus('live', '手動極速直連中');
+                    showToast("已建立實時 60fps 串流通道！", "success");
+                };
+
+                // 建立觀眾端的聊天 Data Channel 管道
+                manualPeerConnection.ondatachannel = (event) => {
+                    const dc = event.channel;
+                    setupDataChannel(dc, 'host');
+                };
+
+                // 重要：觀眾端同樣等 ICE 收集完成後再導出 Answer
+                manualPeerConnection.onicecandidate = (event) => {
+                    if (event.candidate === null) {
+                        const answer = manualPeerConnection.localDescription;
+                        const encodedAnswer = btoa(unescape(encodeURIComponent(JSON.stringify(answer))));
+                        document.getElementById('manual-answer-output').value = encodedAnswer;
+                        logToSystem("🎉 同意回傳碼生成成功！請點選「複製回傳碼」傳回給主播。", "success");
+                        showToast("同意回傳碼產生成功！", "success");
+                    }
+                };
+
+                // 設定 Remote 
+                await manualPeerConnection.setRemoteDescription(new RTCSessionDescription(offerObj));
+                
+                // 產生 Answer
+                const answer = await manualPeerConnection.createAnswer();
+                await manualPeerConnection.setLocalDescription(answer);
+
+            } catch (err) {
+                logToSystem(`解析邀請碼失敗: ${err.message}`, "error");
+                showToast("解析失敗，請確認主播邀請碼複製完整！", "error");
+            }
+        }
+
+        // 觀眾複製手動回傳碼
+        function copyManualAnswer() {
+            const textarea = document.getElementById('manual-answer-output');
+            textarea.select();
+            document.execCommand('copy');
+            showToast("回傳同意碼已複製到您的剪貼簿！", "success");
+        }
+
+        // ------------------ 【原自動模式 P2P 邏輯 (保留原樣)】 ------------------
+
+        // HOST (自動房號) 邏輯：擷取螢幕並註冊房號
         async function startScreenShare() {
             if (!currentUser || !roomsCollection) {
                 showToast("安全登入尚未就緒，請稍候...", "info");
@@ -846,6 +1178,11 @@
                 signalsUnsubscribe = null;
             }
 
+            if (manualPeerConnection) {
+                manualPeerConnection.close();
+                manualPeerConnection = null;
+            }
+
             activeViewersList.clear();
             updateViewerCount();
 
@@ -853,29 +1190,7 @@
             showToast("已停止畫面共享。", "info");
         }
 
-        // 3. 角色與切換面板
-        function switchRole(role) {
-            currentRole = role;
-            const tabHost = document.getElementById('tab-host');
-            const tabViewer = document.getElementById('tab-viewer');
-            const panelHost = document.getElementById('panel-host');
-            const panelViewer = document.getElementById('panel-viewer');
-
-            if (role === 'host') {
-                tabHost.className = "flex-1 py-2 text-xs font-semibold rounded-lg transition-all bg-indigo-600 text-white shadow-md";
-                tabViewer.className = "flex-1 py-2 text-xs font-semibold rounded-lg transition-all text-gray-400 hover:text-gray-200";
-                panelHost.classList.remove('hidden');
-                panelViewer.classList.add('hidden');
-                updateShareUrl();
-            } else {
-                tabHost.className = "flex-1 py-2 text-xs font-semibold rounded-lg transition-all text-gray-400 hover:text-gray-200";
-                tabViewer.className = "flex-1 py-2 text-xs font-semibold rounded-lg transition-all bg-emerald-600 text-white shadow-md";
-                panelHost.classList.add('hidden');
-                panelViewer.classList.remove('hidden');
-            }
-        }
-
-        // VIEWER (觀看端) 邏輯：加入房間
+        // VIEWER (自動加入) 邏輯：加入房間
         async function joinRoom() {
             if (!currentUser || !roomsCollection) {
                 showToast("安全登入尚未就緒，請稍候...", "info");
@@ -1249,6 +1564,11 @@
                 activeCall = null;
             }
 
+            if (manualPeerConnection) {
+                manualPeerConnection.close();
+                manualPeerConnection = null;
+            }
+
             activeDataChannel = null;
             activeDataChannels = {};
 
@@ -1260,6 +1580,8 @@
             placeholder.classList.remove('hidden');
 
             document.getElementById('btn-start-share').classList.remove('hidden');
+            document.getElementById('btn-manual-capture').classList.remove('hidden');
+            document.getElementById('manual-step-sdp').classList.add('hidden');
             document.getElementById('btn-stop-share').classList.add('hidden');
             document.getElementById('room-link-container').classList.add('hidden');
             
@@ -1308,7 +1630,7 @@
             }
         }
 
-        // 10. 自訂 Toast 通知 (全新修復！)
+        // 10. 自訂 Toast 通知
         let toastTimeout = null;
         function showToast(message, type = 'info') {
             const toast = document.getElementById('notification-toast');
